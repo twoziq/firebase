@@ -5,6 +5,7 @@ const API_URL = 'https://firebase-683518334177.asia-northeast3.run.app';
 
 export const api = axios.create({
   baseURL: API_URL,
+  timeout: 30000, // 30 seconds for complex calculations
   headers: {
     'Content-Type': 'application/json',
   },

@@ -10,7 +10,6 @@ export const DeepQuantAnalysis = () => {
   const [loading, setLoading] = useState(false);
   const { t } = useLanguage();
   
-  // State for inputs
   const [ticker, setTicker] = useState('^IXIC');
   const [startDate, setStartDate] = useState('2011-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -18,9 +17,11 @@ export const DeepQuantAnalysis = () => {
 
   const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number) => {
     setLoading(true);
-    console.log(`Fetching analysis for ${tck} from ${sDate} to ${eDate}, period ${period}`);
+    // CRITICAL: Encode ticker to handle characters like ^
+    const encodedTicker = encodeURIComponent(tck);
+    console.log(`[ACTION] Fetching analysis for ${tck} (${encodedTicker})`);
     
-    api.get<DeepAnalysisData>(`/api/deep-analysis/${tck}`, {
+    api.get<DeepAnalysisData>(`/api/deep-analysis/${encodedTicker}`, {
       params: {
         start_date: sDate,
         end_date: eDate,
@@ -28,26 +29,21 @@ export const DeepQuantAnalysis = () => {
       }
     })
       .then(res => {
-        console.log('Deep analysis data received:', res.data.ticker);
+        console.log('[SUCCESS] Deep analysis received');
         setData(res.data);
       })
       .catch(err => {
-        console.error('Failed to fetch deep analysis:', err);
-        alert('Analysis failed. Check console for logs.');
+        console.error('[FAILED] Deep analysis request error:', err.message);
       })
       .finally(() => setLoading(false));
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    fetchAnalysis(ticker, startDate, endDate, analysisPeriod);
-  }, []); // Only once on mount
+  useEffect(() => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod); }, []);
 
   const handleAnalyzeClick = () => {
     fetchAnalysis(ticker, startDate, endDate, analysisPeriod);
   };
 
-  // Safe data mapping
   const trendData = data?.trend.dates.map((date, i) => ({
     date, price: data.trend.prices[i], upper: data.trend.upper[i], middle: data.trend.middle[i], lower: data.trend.lower[i]
   })) || [];
@@ -68,14 +64,7 @@ export const DeepQuantAnalysis = () => {
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[50] py-4 border-b border-border">
         <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
-        <TickerCombobox 
-          onSearch={(t) => { 
-            setTicker(t); 
-            fetchAnalysis(t, startDate, endDate, analysisPeriod); 
-          }} 
-          isLoading={loading} 
-          initialValue={ticker} 
-        />
+        <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod); }} isLoading={loading} initialValue={ticker} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
@@ -89,11 +78,7 @@ export const DeepQuantAnalysis = () => {
           <input type="number" value={analysisPeriod} onChange={e => setAnalysisPeriod(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
         </div>
         <div className="flex items-end">
-          <button 
-            onClick={handleAnalyzeClick} 
-            disabled={loading}
-            className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
+          <button onClick={handleAnalyzeClick} disabled={loading} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90 transition-opacity">
             {loading ? '...' : t('analyze')}
           </button>
         </div>
@@ -116,7 +101,7 @@ export const DeepQuantAnalysis = () => {
         </div>
       )}
 
-      {loading && <div className="text-center py-20 text-muted-foreground animate-pulse">Running Deep Statistics...</div>}
+      {loading && <div className="text-center py-20 text-muted-foreground animate-pulse font-bold">Running Statistics...</div>}
 
       {data && !loading && (
         <>
@@ -132,7 +117,7 @@ export const DeepQuantAnalysis = () => {
                     <Bar dataKey="count">
                       {histData.map((entry, index) => {
                         let color = entry.val > 0 ? "#86efac" : "#93c5fd";
-                        if (data && Math.abs(entry.val - data.quant.mean) > 2 * data.quant.std) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
+                        if (Math.abs(entry.val - data.quant.mean) > 2 * data.quant.std) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
                         return <Cell key={index} fill={color} />;
                       })}
                     </Bar>

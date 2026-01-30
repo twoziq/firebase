@@ -1,6 +1,4 @@
-// Simple logger to capture console logs for debugging
 const logs: string[] = [];
-
 const originalLog = console.log;
 const originalError = console.error;
 
@@ -14,13 +12,16 @@ console.error = (...args: any[]) => {
   originalError.apply(console, args);
 };
 
-export const getLogs = () => logs.join('\n');
-
 export const copyLogsToClipboard = () => {
-  const text = getLogs();
+  const text = logs.join('\n');
+  if (!text) {
+    alert('No logs recorded yet.');
+    return;
+  }
   navigator.clipboard.writeText(text).then(() => {
-    alert('Logs copied to clipboard!');
+    alert('Debug logs copied to clipboard! Please paste them into the chat.');
   }).catch(err => {
-    originalError('Failed to copy logs', err);
+    alert('Failed to copy logs to clipboard.');
+    originalError(err);
   });
 };
