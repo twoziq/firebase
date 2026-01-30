@@ -14,20 +14,21 @@ export const DeepQuantAnalysis = () => {
   const [startDate, setStartDate] = useState('2010-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [analysisPeriod, setAnalysisPeriod] = useState(252);
+  const [forecastDays, setForecastDays] = useState(252);
 
-  const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number) => {
+  const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number, fDays: number) => {
     setLoading(true);
     api.get<DeepAnalysisData>(`/api/deep-analysis/${encodeURIComponent(tck)}`, {
-      params: { start_date: sDate, end_date: eDate, analysis_period: period }
+      params: { start_date: sDate, end_date: eDate, analysis_period: period, forecast_days: fDays }
     })
       .then(res => setData(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod); }, []);
+  useEffect(() => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod, forecastDays); }, []);
 
-  const handleAnalyzeClick = () => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod); };
+  const handleAnalyzeClick = () => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod, forecastDays); };
 
   // --- Data Mapping ---
   const trendData = data?.trend?.dates?.map((date, i) => ({
@@ -50,7 +51,6 @@ export const DeepQuantAnalysis = () => {
       p50: val, 
       upper: data.simulation.upper?.[i], 
       lower: data.simulation.lower?.[i], 
-      actual: data.simulation.actual_past?.[i] 
     };
     data.simulation.samples?.forEach((path, idx) => { obj[`s${idx}`] = path[i]; });
     return obj;
@@ -68,15 +68,18 @@ export const DeepQuantAnalysis = () => {
         <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod); }} isLoading={loading} initialValue={ticker} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Period (Days)</label>
+        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Lookback (Days)</label>
           <input type="number" value={analysisPeriod} onChange={e => setAnalysisPeriod(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+        </div>
+        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Forecast (Days)</label>
+          <input type="number" value={forecastDays} onChange={e => setForecastDays(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="flex items-end">
           <button onClick={handleAnalyzeClick} disabled={loading} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90">
@@ -107,16 +110,16 @@ export const DeepQuantAnalysis = () => {
       {data && !loading && (
         <>
           <section className="space-y-4">
-             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">1. Historical Typical Path vs Recent</h2></div>
+             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">1. Future Simulation (Monte Carlo)</h2></div>
              <div className="h-[450px] bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={pathData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
-                    <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} />
+                    <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} label={{ value: 'Future Days', position: 'insideBottomRight', offset: -5 }} />
                     <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} />
-                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
+                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} labelFormatter={(v) => `Future Day: +${v}`} />
                     <Legend />
-                    <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
+                    <ReferenceLine y={data.trend?.prices ? data.trend.prices[data.trend.prices.length-1] : 0} stroke="#6b7280" strokeDasharray="3 3" label="Current Price" />
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.05} />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
                     
@@ -128,14 +131,13 @@ export const DeepQuantAnalysis = () => {
                         dataKey={`s${i}`} 
                         stroke="#6b7280" 
                         strokeWidth={1} 
-                        strokeOpacity={0.2} 
+                        strokeOpacity={0.1} 
                         dot={false} 
                         legendType="none"
                       />
                     ))}
                     
-                    <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={4} dot={false} className="text-foreground" name="Recent Moving" />
-                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={4} dot={false} name="Historical Mean" />
+                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Median Scenario (P50)" />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>

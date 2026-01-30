@@ -143,11 +143,11 @@ def get_risk_return(tickers: str):
     return result
 
 @app.get("/api/deep-analysis/{ticker}")
-def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252):
+def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252, forecast_days: int = 252):
     try:
         if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
         
-        # Use robust get_data function
+        # 1. Fetch Data (Full History for Trend & DNA Extraction)
         prices = get_data(ticker, start=start_date, end=end_date)
         
         if prices is None or prices.empty: 
@@ -157,54 +157,116 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         prices = prices.ffill().dropna()
         price_vals = prices.values
         
-        # If data is too short, try fetching max period
-        if len(price_vals) < analysis_period:
-            print(f"Data too short for {ticker} ({len(price_vals)}), fetching max period...")
-            # Force fetch max period by passing specific very old date or relying on fallback inside get_data if we modify it.
-            # Here we just call get_data with None to trigger logic if implemented, but current get_data logic with None start/end uses 'max' only in fallback.
-            # Let's explicitly try fallback style directly or just ask get_data with very old start
-            prices = get_data(ticker, start="1990-01-01") 
-            
-            if prices is None: raise HTTPException(status_code=404)
-            prices = prices.ffill().dropna()
-            price_vals = prices.values
-            if len(price_vals) < analysis_period: 
-                raise HTTPException(status_code=400, detail=f"Data history too short ({len(price_vals)} days) for analysis")
+        if len(price_vals) < 30: # Minimum data check
+             raise HTTPException(status_code=400, detail="Not enough data history")
 
-        rolling_rets = (price_vals[analysis_period:] / price_vals[:-analysis_period]) - 1
-        rolling_rets_pct = rolling_rets * 100
-        num_windows = len(price_vals) - analysis_period
-        step = max(1, num_windows // 500)
+        # --- 2. Simulation (Future Prediction via Monte Carlo) ---
+        # Extract DNA: Drift & Volatility from historical log returns
+        log_returns = np.log(price_vals[1:] / price_vals[:-1])
+        mu = np.mean(log_returns) # Daily Drift
+        sigma = np.std(log_returns) # Daily Volatility
         
-        all_paths = [price_vals[i : i + analysis_period] / price_vals[i] * 100 for i in range(0, num_windows, step)]
-        avg_path = np.mean(all_paths, axis=0).tolist()
-        std_path = np.std(all_paths, axis=0)
+        # Monte Carlo Simulation
+        num_simulations = 1000
+        sim_days = forecast_days
+        last_price = price_vals[-1]
         
-        # 30 random samples for background
-        sample_indices = random.sample(range(len(all_paths)), min(30, len(all_paths)))
-        samples = [all_paths[i].tolist() for i in sample_indices]
+        # GBM Formula: S_t = S_0 * exp((mu - 0.5*sigma^2)*t + sigma*W_t)
+        # We simulate step by step or vectorized
+        # Vectorized: [sims, days]
+        random_shocks = np.random.normal(0, 1, (num_simulations, sim_days))
+        # Cumulative sum for Brownian Motion
+        brownian_motion = np.cumsum(random_shocks, axis=1)
+        time_steps = np.arange(1, sim_days + 1)
         
-        recent_actual = (price_vals[-analysis_period:] / price_vals[-analysis_period] * 100).tolist()
+        # Drift component (cumulative)
+        drift_component = (mu - 0.5 * sigma**2) * time_steps
         
+        # Simulated Paths
+        sim_paths = last_price * np.exp(drift_component + sigma * brownian_motion)
+        
+        # Add starting point (today)
+        sim_paths = np.hstack([np.full((num_simulations, 1), last_price), sim_paths])
+        
+        # Calculate Percentiles
+        p50_path = np.percentile(sim_paths, 50, axis=0).tolist()
+        p95_path = np.percentile(sim_paths, 95, axis=0).tolist() # Upper
+        p05_path = np.percentile(sim_paths, 5, axis=0).tolist() # Lower
+        
+        # Samples for visualization (first 30)
+        samples = sim_paths[:30].tolist()
+        
+        # --- 3. Quant (Historical Rolling Return Analysis) ---
+        lookback = analysis_period
+        if len(price_vals) > lookback:
+            rolling_rets = (price_vals[lookback:] / price_vals[:-lookback]) - 1
+            rolling_rets_pct = rolling_rets * 100
+            
+            # Current Return (for comparison)
+            current_ret_pct = rolling_rets_pct[-1]
+            
+            # Z-Score Calculation
+            mean_ret = np.mean(rolling_rets_pct)
+            std_ret = np.std(rolling_rets_pct)
+            current_z = (current_ret_pct - mean_ret) / std_ret if std_ret > 0 else 0
+            
+            # Z-Score History (Rolling)
+            # Efficient rolling z-score is complex, simplifying to static mean/std for history visualization or just return history
+            # For "Z-Score Flow", let's show how the current N-day return would have looked historically (normalized by full history stats)
+            z_history = ((rolling_rets_pct - mean_ret) / std_ret).tolist()[-100:] # Last 100 windows
+            z_dates = prices.index[lookback:].strftime('%Y-%m-%d').tolist()[-100:]
+            
+            # Histogram Bins
+            hist_counts, hist_bins = np.histogram(rolling_rets_pct, bins=100)
+            
+        else:
+            # Fallback if not enough data for lookback
+            mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
+            z_history, z_dates, hist_bins, hist_counts = [], [], [], []
+
+        # --- 4. Trend (Log-Linear Regression) ---
         x = np.arange(len(price_vals))
+        # Fit log(price) = a*x + b
         slope, intercept = np.polyfit(x, np.log(price_vals), 1)
-        line = np.exp(slope * x + intercept)
-        std_resid = np.std(np.log(price_vals) - np.log(line))
+        trend_line = np.exp(slope * x + intercept)
+        std_resid = np.std(np.log(price_vals) - np.log(trend_line))
+        
+        trend_dates = prices.index.strftime('%Y-%m-%d').tolist()
         
         return {
-            "ticker": ticker, "first_date": prices.index[0].strftime('%Y-%m-%d'), "avg_1y_return": float(np.mean(rolling_rets_pct)),
-            "current_1y_return": float(rolling_rets_pct[-1]),
-            "trend": {
-                "dates": prices.index.strftime('%Y-%m-%d').tolist(), "prices": price_vals.tolist(),
-                "middle": line.tolist(), "upper": (line * np.exp(2*std_resid)).tolist(), "lower": (line * np.exp(-2*std_resid)).tolist()
-            },
+            "ticker": ticker, 
+            "first_date": prices.index[0].strftime('%Y-%m-%d'), 
+            
+            # Quant Results
+            "avg_1y_return": float(mean_ret),
+            "current_1y_return": float(current_ret_pct),
             "quant": {
-                "mean": float(np.mean(rolling_rets_pct)), "std": float(np.std(rolling_rets_pct)), "current_z": float((rolling_rets_pct[-1] - np.mean(rolling_rets_pct)) / np.std(rolling_rets_pct)) if len(rolling_rets_pct)>0 else 0,
-                "z_history": ((prices.pct_change()-prices.pct_change().mean())/prices.pct_change().std()).fillna(0).tail(100).tolist(),
-                "z_dates": prices.tail(100).index.strftime('%Y-%m-%d').tolist(),
-                "bins": np.histogram(rolling_rets_pct, bins=100)[1][:-1].tolist(), "counts": np.histogram(rolling_rets_pct, bins=100)[0].tolist()
+                "mean": float(mean_ret), 
+                "std": float(std_ret), 
+                "current_z": float(current_z),
+                "z_history": z_history,
+                "z_dates": z_dates,
+                "bins": hist_bins[:-1].tolist(), 
+                "counts": hist_counts.tolist()
             },
-            "simulation": { "p50": avg_path, "upper": (np.array(avg_path) + 2*std_path).tolist(), "lower": (np.array(avg_path) - 2*std_path).tolist(), "actual_past": recent_actual, "samples": samples }
+            
+            # Trend Results
+            "trend": {
+                "dates": trend_dates, 
+                "prices": price_vals.tolist(),
+                "middle": trend_line.tolist(), 
+                "upper": (trend_line * np.exp(2*std_resid)).tolist(), 
+                "lower": (trend_line * np.exp(-2*std_resid)).tolist()
+            },
+            
+            # Simulation Results (Future)
+            "simulation": { 
+                "p50": p50_path, 
+                "upper": p95_path, 
+                "lower": p05_path, 
+                "actual_past": [], # No longer showing past overlay on future sim
+                "samples": samples 
+            }
         }
     except Exception as e:
         print(f"Error in get_deep_analysis: {e}")
