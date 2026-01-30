@@ -70,8 +70,7 @@ export const MarketValuation = () => {
                 stroke="#9ca3af" 
                 fontSize={10} 
                 tickFormatter={formatXAxis}
-                interval={0}
-                minTickGap={20}
+                minTickGap={30}
               />
               <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={10} tickFormatter={(v) => v.toFixed(1)} />
               <Tooltip 

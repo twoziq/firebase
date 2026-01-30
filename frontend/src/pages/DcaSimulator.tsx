@@ -21,7 +21,7 @@ export const DcaSimulator = () => {
     if (selectedTicker !== ticker) setTicker(selectedTicker);
     
     console.log(`[DCA] Fetching for ${selectedTicker} from ${startDate} to ${endDate}`);
-    api.get(`/api/dca/`, {
+    api.get(`/api/dca`, {
       params: { 
         ticker: selectedTicker,
         start_date: startDate, 

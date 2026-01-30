@@ -36,9 +36,9 @@ export const RiskReturnMap = () => {
       const maxX = Math.max(...risks);
       const minY = Math.min(...rets);
       const maxY = Math.max(...rets);
-      // Increased padding to 10% for better visual comfort
-      const padX = (maxX - minX) * 0.1 || 2;
-      const padY = (maxY - minY) * 0.1 || 2;
+      // Increased padding to 20% for much better visual comfort
+      const padX = (maxX - minX) * 0.2 || 2;
+      const padY = (maxY - minY) * 0.2 || 2;
       return { x: [minX - padX, maxX + padX], y: [minY - padY, maxY + padY] };
     }
     
