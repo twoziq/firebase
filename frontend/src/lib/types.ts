@@ -29,6 +29,7 @@ export interface DeepAnalysisData {
   current_price: number;
   invested_days: number;
   avg_1y_return: number;
+  current_1y_return: number;
   trend: {
     dates: string[];
     prices: number[];
@@ -47,6 +48,8 @@ export interface DeepAnalysisData {
   };
   simulation: {
     p50: number[];
+    upper: number[];
+    lower: number[];
     samples: number[][];
     actual_past: number[];
   };
