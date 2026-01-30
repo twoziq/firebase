@@ -17,11 +17,18 @@ export const DeepQuantAnalysis = () => {
 
   const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number) => {
     setLoading(true);
+    console.log(`[DeepQuant] Start fetching: ${tck}`);
+    
     api.get<DeepAnalysisData>(`/api/deep-analysis/${encodeURIComponent(tck)}`, {
       params: { start_date: sDate, end_date: eDate, analysis_period: period }
     })
-      .then(res => setData(res.data))
-      .catch(console.error)
+      .then(res => {
+        console.log('[DeepQuant] Data received successfully');
+        setData(res.data);
+      })
+      .catch(err => {
+        console.error('[DeepQuant] API Error:', err.response?.data || err.message);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -29,23 +36,36 @@ export const DeepQuantAnalysis = () => {
 
   const handleAnalyzeClick = () => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod); };
 
-  // Data Formatting
-  const trendData = data?.trend.dates.map((date, i) => ({
-    date, price: data.trend.prices[i], upper: data.trend.upper[i], middle: data.trend.middle[i], lower: data.trend.lower[i]
+  // --- Safe Data Mapping ---
+  const trendData = data?.trend?.dates?.map((date, i) => ({
+    date, 
+    price: data.trend.prices[i], 
+    upper: data.trend.upper[i], 
+    middle: data.trend.middle[i], 
+    lower: data.trend.lower[i]
   })) || [];
 
-  const histData = data?.quant.bins.map((bin, i) => ({
-    bin: bin.toFixed(0) + '%', val: bin, count: data.quant.counts[i]
+  const histData = data?.quant?.bins?.map((bin, i) => ({
+    bin: bin.toFixed(0) + '%', 
+    val: bin, 
+    count: data.quant.counts[i]
   })) || [];
 
-  const pathData = data?.simulation.p50.map((val, i) => {
-    const obj: any = { day: i, p50: val, upper: data.simulation.upper[i], lower: data.simulation.lower[i], actual: data.simulation.actual_past?.[i] };
-    data.simulation.samples.forEach((path, idx) => { obj[`s${idx}`] = path[i]; });
+  const pathData = data?.simulation?.p50?.map((val, i) => {
+    const obj: any = { 
+      day: i, 
+      p50: val, 
+      upper: data.simulation.upper?.[i], 
+      lower: data.simulation.lower?.[i], 
+      actual: data.simulation.actual_past?.[i] 
+    };
+    data.simulation.samples?.forEach((path, idx) => { obj[`s${idx}`] = path[i]; });
     return obj;
   }) || [];
 
-  const zHistoryData = data?.quant.z_history.map((z, i) => ({
-    date: data.quant.z_dates[i], z: z
+  const zHistoryData = data?.quant?.z_history?.map((z, i) => ({
+    date: data.quant.z_dates[i], 
+    z: z
   })) || [];
 
   return (
@@ -57,13 +77,13 @@ export const DeepQuantAnalysis = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Period (Days)</label>
-          <input type="number" value={analysisPeriod} onChange={e => setAnalysisPeriod(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+          <input type="number" value={analysisPeriod} onChange={e => setAnalysisPeriod(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="flex items-end">
           <button onClick={handleAnalyzeClick} disabled={loading} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90">
@@ -72,11 +92,11 @@ export const DeepQuantAnalysis = () => {
         </div>
       </div>
 
-      {data && (
+      {data && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-green-500">
              <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Rolling Mean Return ({analysisPeriod}D)</p>
-             <p className="text-2xl font-black text-green-500">{data.avg_1y_return.toFixed(1)}%</p>
+             <p className="text-2xl font-black text-green-500">{data.avg_1y_return?.toFixed(1)}%</p>
            </div>
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm">
              <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Data Available Since</p>
@@ -84,16 +104,15 @@ export const DeepQuantAnalysis = () => {
            </div>
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-primary">
              <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Current Z-Score</p>
-             <p className="text-2xl font-black text-primary">{data.quant.current_z.toFixed(2)}σ</p>
+             <p className="text-2xl font-black text-primary">{data.quant?.current_z?.toFixed(2)}σ</p>
            </div>
         </div>
       )}
 
-      {loading && <div className="text-center py-20 text-muted-foreground animate-pulse font-bold">Processing Historical Data...</div>}
+      {loading && <div className="text-center py-20 text-muted-foreground animate-pulse font-bold">Processing Data...</div>}
 
       {data && !loading && (
         <>
-          {/* SECTION 1: Path Comparison (MOST IMPORTANT) */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">1. Historical Typical Path vs Recent</h2></div>
              <div className="h-[450px] bg-card border border-border rounded-2xl p-6 shadow-sm">
@@ -101,28 +120,22 @@ export const DeepQuantAnalysis = () => {
                   <ComposedChart data={pathData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
                     <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} />
-                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} tickFormatter={(v) => `${v.toFixed(0)}`} />
+                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
                     <Legend />
                     <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
-                    
-                    {/* Sigma Range Fill */}
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.05} />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
-
-                    {/* Random Samples (30) */}
                     {Array.from({length: 30}).map((_, i) => (
                       <Line key={i} type="monotone" dataKey={`s${i}`} stroke="#6b7280" strokeWidth={1} strokeOpacity={0.1} dot={false} />
                     ))}
-                    
-                    <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={4} dot={false} className="text-foreground" name={`Current ${analysisPeriod}D Moving`} />
-                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={4} dot={false} name="Historical Mean Path" />
+                    <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={4} dot={false} className="text-foreground" name="Recent Moving" />
+                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={4} dot={false} name="Historical Mean" />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>
           </section>
 
-          {/* SECTION 2: Probability Distribution */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. {t('prob_dist')}</h2></div>
              <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm">
@@ -135,27 +148,24 @@ export const DeepQuantAnalysis = () => {
                     <Bar dataKey="count">
                       {histData.map((entry, index) => {
                         let color = entry.val > 0 ? "#86efac" : "#93c5fd";
-                        if (Math.abs(entry.val - data.quant.mean) > 2 * data.quant.std) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
+                        if (data.quant && Math.abs(entry.val - data.quant.mean) > 2 * data.quant.std) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
                         return <Cell key={index} fill={color} />;
                       })}
                     </Bar>
-                    <ReferenceLine x={data.quant.mean.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
-                    
-                    {/* TODAY Arrow/Marker */}
-                    <ReferenceLine x={data.current_1y_return.toFixed(0) + '%'} stroke="#f59e0b" strokeWidth={2} label={{position: 'top', value: 'Today ▽', fill: '#f59e0b', fontWeight: 'bold'}} />
+                    <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
+                    <ReferenceLine x={data.current_1y_return?.toFixed(0) + '%'} stroke="#f59e0b" strokeWidth={2} label={{position: 'top', value: 'Today ▽', fill: '#f59e0b', fontWeight: 'bold'}} />
                   </BarChart>
                 </ResponsiveContainer>
              </div>
           </section>
 
-          {/* SECTION 3: Z-Score Flow */}
           <section className="space-y-4">
-             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-yellow-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">3. {t('z_flow')} (FULL RANGE)</h2></div>
+             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-yellow-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">3. {t('z_flow')}</h2></div>
              <div className="h-[300px] bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={zHistoryData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
-                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={100} tickFormatter={(v) => v.slice(2, 7)} />
+                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={100} tickFormatter={(v) => v?.slice(2, 7)} />
                     <YAxis domain={[-4, 4]} stroke="#9ca3af" fontSize={10} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
                     <ReferenceLine y={2} stroke="#ef4444" strokeDasharray="3 3" />
@@ -167,15 +177,14 @@ export const DeepQuantAnalysis = () => {
              </div>
           </section>
 
-          {/* SECTION 4: Log-Linear Trend */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-green-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">4. Log-Linear Trend Channel</h2></div>
              <div className="h-[500px] bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
-                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={100} tickFormatter={(v) => v.slice(0, 4)} />
-                    <YAxis domain={['auto', 'auto']} scale="log" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => `$${v.toFixed(0)}`} />
+                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={100} tickFormatter={(v) => v?.slice(0, 4)} />
+                    <YAxis domain={['auto', 'auto']} scale="log" stroke="#9ca3af" fontSize={10} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
                     <Legend />
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.05} />
