@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, TrendingUp, Activity, PieChart, Menu, X } from 'lucide-react';
+import { BarChart3, Wallet, Map as MapIcon, LineChart, Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { ModeToggle } from './ModeToggle';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,10 +15,10 @@ const SidebarItem = ({ icon: Icon, label, to, active }: { icon: any, label: stri
       "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group",
       active 
         ? "bg-primary/10 text-primary" 
-        : "text-gray-400 hover:text-gray-100 hover:bg-gray-800"
+        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
     )}
   >
-    <Icon size={20} className={cn("transition-colors", active ? "text-primary" : "text-gray-400 group-hover:text-gray-100")} />
+    <Icon size={20} className={cn("transition-colors", active ? "text-primary" : "text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100")} />
     <span className="font-medium">{label}</span>
   </Link>
 );
@@ -27,14 +28,14 @@ export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
 
   const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-    { icon: TrendingUp, label: 'Trend Analysis', path: '/trend' },
-    { icon: Activity, label: 'Simulation', path: '/simulation' },
-    { icon: PieChart, label: 'Quant Analysis', path: '/quant' },
+    { icon: BarChart3, label: 'Market Valuation', path: '/' },
+    { icon: Wallet, label: 'DCA Simulator', path: '/dca' },
+    { icon: MapIcon, label: 'Risk/Return Map', path: '/risk' },
+    { icon: LineChart, label: 'Deep Quant', path: '/deep' },
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground flex overflow-hidden transition-colors duration-300">
       {/* Sidebar */}
       <aside 
         className={cn(
@@ -47,7 +48,7 @@ export const Layout = ({ children }: LayoutProps) => {
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
               Twoziq
             </h1>
-            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-gray-400">
+            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground">
               <X size={20} />
             </button>
           </div>
@@ -65,11 +66,11 @@ export const Layout = ({ children }: LayoutProps) => {
           </nav>
 
           <div className="p-4 border-t border-border">
-            <div className="bg-gray-800/50 rounded-lg p-3">
-              <p className="text-xs text-gray-500">System Status</p>
+            <div className="bg-muted/50 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground">System Status</p>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-xs font-medium text-gray-300">API Operational</span>
+                <span className="text-xs font-medium text-foreground">API Operational</span>
               </div>
             </div>
           </div>
@@ -78,21 +79,22 @@ export const Layout = ({ children }: LayoutProps) => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-6">
-          <button 
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="text-gray-400 hover:text-white lg:hidden"
-          >
-            <Menu size={24} />
-          </button>
+        <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 z-40">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="text-muted-foreground hover:text-foreground lg:hidden"
+            >
+              <Menu size={24} />
+            </button>
+          </div>
           
-          {/* Global Search or Header Info could go here */}
           <div className="ml-auto flex items-center gap-4">
-             {/* Placeholder for future header items */}
+             <ModeToggle />
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6 bg-background">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
