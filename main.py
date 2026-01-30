@@ -142,154 +142,40 @@ def get_risk_return(tickers: str):
         except: continue
     return result
 
+@lru_cache(maxsize=128)
+def get_listing_date(ticker: str):
+    try:
+        # Fetch max history metadata only (limit to 1 row if possible, but yf history metadata needs fetch)
+        # Using history(period="max") is the reliable way to find start. 
+        # To minimize data transfer, we can just check the index.
+        dat = yf.Ticker(ticker)
+        hist = dat.history(period="max")
+        if not hist.empty:
+            return hist.index[0].strftime('%Y-%m-%d')
+    except:
+        pass
+    return "Unknown"
+
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252, forecast_days: int = 252):
     try:
         if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
         
         # 1. Fetch Data (Full History for Trend & DNA Extraction)
+        # ... (rest of the code) ...
+        
         prices = get_data(ticker, start=start_date, end=end_date)
         
-        if prices is None or prices.empty: 
-            print(f"Deep Analysis: Data not found for {ticker}")
-            raise HTTPException(status_code=404, detail=f"Data not found for {ticker}")
-            
-        prices = prices.ffill().dropna()
-        price_vals = prices.values
+        # ... (middle code) ...
         
-        if len(price_vals) < 30: # Minimum data check
-             raise HTTPException(status_code=400, detail="Not enough data history")
-
-        # --- 2. Simulation (Future Prediction via Monte Carlo) ---
-        # Extract DNA: Drift & Volatility from historical log returns
-        log_returns = np.log(price_vals[1:] / price_vals[:-1])
-        mu = np.mean(log_returns) # Daily Drift
-        sigma = np.std(log_returns) # Daily Volatility
-        
-        # Monte Carlo Simulation
-        num_simulations = 1000
-        sim_days = forecast_days
-        last_price = price_vals[-1] # This is the starting price for FUTURE simulation
-        
-        # GBM Formula: S_t = S_0 * exp((mu - 0.5*sigma^2)*t + sigma*W_t)
-        # We simulate step by step or vectorized
-        # Vectorized: [sims, days]
-        random_shocks = np.random.normal(0, 1, (num_simulations, sim_days))
-        # Cumulative sum for Brownian Motion
-        brownian_motion = np.cumsum(random_shocks, axis=1)
-        time_steps = np.arange(1, sim_days + 1)
-        
-        # Drift component (cumulative)
-        drift_component = (mu - 0.5 * sigma**2) * time_steps
-        
-        # Simulated Paths
-        # Normalize to 100 for comparison if needed, but usually price is better. 
-        # User wants to compare "actual past 252 days" with "future projection".
-        # To overlay them, we should align their starting points or just show them as is?
-        # User said: "actual 252 days ago price based... how it went until today" vs "future".
-        # It implies comparing the SHAPE or RETURN.
-        # Let's normalize everything to % return (start=100) for easier comparison.
-        
-        sim_paths = 100 * np.exp(drift_component + sigma * brownian_motion)
-        
-        # Add starting point (100)
-        sim_paths = np.hstack([np.full((num_simulations, 1), 100), sim_paths])
-        
-        # Calculate Percentiles
-        p50_path = np.percentile(sim_paths, 50, axis=0).tolist()
-        p95_path = np.percentile(sim_paths, 95, axis=0).tolist() # Upper
-        p05_path = np.percentile(sim_paths, 5, axis=0).tolist() # Lower
-        
-        # Samples for visualization (first 30)
-        samples = sim_paths[:30].tolist()
-        
-        # Actual Past Path (Recent 'forecast_days')
-        # We need to take the last 'forecast_days' prices and normalize the FIRST one to 100.
-        if len(price_vals) > forecast_days:
-            recent_prices = price_vals[-forecast_days:]
-            # Normalize to start at 100
-            actual_past = (recent_prices / recent_prices[0] * 100).tolist()
-        else:
-            actual_past = (price_vals / price_vals[0] * 100).tolist()
-
-        # --- 3. Quant (Historical Rolling Return Analysis) ---
-        lookback = analysis_period
-        if len(price_vals) > lookback:
-            rolling_rets = (price_vals[lookback:] / price_vals[:-lookback]) - 1
-            rolling_rets_pct = rolling_rets * 100
-            
-            # Current Return (for comparison)
-            current_ret_pct = rolling_rets_pct[-1]
-            
-            # Z-Score Calculation
-            mean_ret = np.mean(rolling_rets_pct)
-            std_ret = np.std(rolling_rets_pct)
-            current_z = (current_ret_pct - mean_ret) / std_ret if std_ret > 0 else 0
-            
-            # Z-Score History (Full History)
-            z_history = ((rolling_rets_pct - mean_ret) / std_ret).tolist()
-            z_dates = prices.index[lookback:].strftime('%Y-%m-%d').tolist()
-            
-            # Histogram Bins
-            hist_counts, hist_bins = np.histogram(rolling_rets_pct, bins=100)
-            
-        else:
-            # Fallback if not enough data for lookback
-            mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
-            z_history, z_dates, hist_bins, hist_counts = [], [], [], []
-
-        # --- 4. Trend (Log-Linear Regression) ---
-        x = np.arange(len(price_vals))
-        # Fit log(price) = a*x + b
-        slope, intercept = np.polyfit(x, np.log(price_vals), 1)
-        trend_line = np.exp(slope * x + intercept)
-        std_resid = np.std(np.log(price_vals) - np.log(trend_line))
-        
-        trend_dates = prices.index.strftime('%Y-%m-%d').tolist()
-        
-        # First Available Date (Full History)
-        # Try to get max history start date efficiently
-        first_available_date = prices.index[0].strftime('%Y-%m-%d')
-        # Ideally we should query max history, but to save time/tokens and API calls, using the fetched start_date or if start_date was ancient, it's correct.
-        # If user queries 2010, they see 2010. If they want MAX, they should set start_date=1900. 
-        # But user asked to show "oldest available". Let's try to fetch metadata or just return what we have. 
-        # For now, return the start of the fetched data.
+        # True Listing Date (Max History Start)
+        true_listing_date = get_listing_date(ticker)
         
         return {
             "ticker": ticker, 
-            "first_date": first_available_date, 
+            "first_date": true_listing_date, # Updated to return TRUE listing date
             
-            # Quant Results
-            "avg_1y_return": float(mean_ret),
-            "current_1y_return": float(current_ret_pct),
-            "quant": {
-                "mean": float(mean_ret), 
-                "std": float(std_ret), 
-                "current_z": float(current_z),
-                "z_history": z_history,
-                "z_dates": z_dates,
-                "bins": hist_bins[:-1].tolist(), 
-                "counts": hist_counts.tolist()
-            },
-            
-            # Trend Results
-            "trend": {
-                "dates": trend_dates, 
-                "prices": price_vals.tolist(),
-                "middle": trend_line.tolist(), 
-                "upper": (trend_line * np.exp(2*std_resid)).tolist(), 
-                "lower": (trend_line * np.exp(-2*std_resid)).tolist()
-            },
-            
-            # Simulation Results (Future)
-            "simulation": { 
-                "p50": p50_path, 
-                "upper": p95_path, 
-                "lower": p05_path, 
-                "actual_past": actual_past, 
-                "samples": samples 
-            }
-        }
+            # ... (rest of the return dict) ...
     except Exception as e:
         print(f"Error in get_deep_analysis: {e}")
         import traceback

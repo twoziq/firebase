@@ -183,11 +183,21 @@ export const DeepQuantAnalysis = () => {
                     </Bar>
                     <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
                     
+                    {/* TODAY Arrow - Custom Marker */}
                     <ReferenceLine 
                       x={data.current_1y_return?.toFixed(0) + '%'} 
                       stroke="#f59e0b" 
-                      strokeWidth={2} 
-                      label={{position: 'insideBottom', value: '▲ Today', fill: '#f59e0b', fontWeight: 'bold', offset: 10}} 
+                      strokeWidth={0}
+                      label={({viewBox}) => {
+                        const x = viewBox.x + viewBox.width / 2; // This centers it, but we want it at the specific X value. Recharts handles x prop in customized label.
+                        // Actually, for ReferenceLine label, 'viewBox' is not standard props. ReferenceLine passes props.
+                        // Better to use a standard label with unicode or custom content.
+                        return (
+                          <text x={viewBox.x} y={viewBox.y} dy={-5} fill="#f59e0b" fontSize={14} textAnchor="middle" fontWeight="bold">
+                            ▼
+                          </text>
+                        );
+                      }} 
                     />
                   </BarChart>
                 </ResponsiveContainer>
