@@ -9,12 +9,17 @@ export const DeepQuantAnalysis = () => {
   const [data, setData] = useState<DeepAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const { t } = useLanguage();
+  
+  // Dynamic Inputs
   const [ticker, setTicker] = useState('^IXIC');
+  const [startDate, setStartDate] = useState('2011-01-01');
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [analysisPeriod, setAnalysisPeriod] = useState(252);
 
   const handleSearch = (selectedTicker: string = ticker) => {
     setLoading(true);
-    setTicker(selectedTicker);
-    api.get<DeepAnalysisData>(`/api/deep-analysis/${selectedTicker}`)
+    if (selectedTicker !== ticker) setTicker(selectedTicker);
+    api.get<DeepAnalysisData>(`/api/deep-analysis/${selectedTicker}?start_date=${startDate}&end_date=${endDate}&analysis_period=${analysisPeriod}`)
       .then(res => setData(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -44,21 +49,42 @@ export const DeepQuantAnalysis = () => {
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-30 py-4 border-b border-border">
-        <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Rolling 252-day Returns (16Y History)</p></div>
+        <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
         <TickerCombobox onSearch={handleSearch} isLoading={loading} initialValue={ticker} />
+      </div>
+
+      {/* Control Panel */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase">Period (Days)</label>
+          <input type="number" value={analysisPeriod} onChange={e => setAnalysisPeriod(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+        </div>
+        <div className="flex items-end">
+          <button onClick={() => handleSearch()} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90 transition-opacity">
+            {t('analyze')}
+          </button>
+        </div>
       </div>
 
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-           <div className="bg-card border border-border p-4 rounded-xl shadow-sm">
-             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Historical Mean (1Y)</p>
+           <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-green-500">
+             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Historical Mean ({analysisPeriod}D)</p>
              <p className="text-2xl font-black text-green-500">{data.avg_1y_return.toFixed(1)}%</p>
            </div>
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm">
              <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Data Available Since</p>
-             <p className="text-2xl font-black text-foreground">{data.first_date}</p>
+             <p className="text-xl font-bold text-foreground">{data.first_date}</p>
            </div>
-           <div className="bg-card border border-border p-4 rounded-xl shadow-sm">
+           <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-primary">
              <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Current Z-Score</p>
              <p className="text-2xl font-black text-primary">{data.quant.current_z.toFixed(2)}σ</p>
            </div>
@@ -67,14 +93,14 @@ export const DeepQuantAnalysis = () => {
 
       {data && (
         <>
-          {/* Section 1: Distribution */}
+          {/* Section 1: Probability Distribution */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">{t('prob_dist')}</h2></div>
              <div className="h-[350px] bg-card border border-border rounded-xl p-4">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={histData} barGap={0} barCategoryGap={1}>
+                  <BarChart data={histData} barGap={0} barCategoryGap={0}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1}/>
-                    <XAxis dataKey="bin" stroke="#9ca3af" fontSize={10} minTickGap={20} />
+                    <XAxis dataKey="bin" stroke="#9ca3af" fontSize={10} minTickGap={30} />
                     <YAxis stroke="#9ca3af" fontSize={10} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
                     <Bar dataKey="count">
@@ -92,7 +118,7 @@ export const DeepQuantAnalysis = () => {
              </div>
           </section>
 
-          {/* Section 2: Path Comparison */}
+          {/* Section 2: Historical Path */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. Historical Typical Path vs Recent</h2></div>
              <div className="h-[400px] bg-card border border-border rounded-xl p-4">
@@ -104,26 +130,26 @@ export const DeepQuantAnalysis = () => {
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
                     <Legend />
                     <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
-                    <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={3} dot={false} className="text-foreground" name="Recent 252D (Actual)" />
+                    <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={3} dot={false} className="text-foreground" name={`Recent ${analysisPeriod}D`} />
                     <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Historical Mean Path" />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>
           </section>
 
-          {/* Section 3: Z-Score Flow (Restored) */}
+          {/* Section 3: Z-Score Flow */}
           <section className="space-y-4">
              <div className="flex items-center gap-2">
                 <div className="w-1 h-8 bg-yellow-500 rounded-full"/>
                 <h2 className="text-xl font-bold text-foreground">3. {t('z_flow')}</h2>
              </div>
-             <div className="h-[300px] bg-card border border-border rounded-xl p-4">
+             <div className="h-[300px] bg-card border border-border rounded-xl p-4 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={zHistoryData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
                     <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => v.slice(5)} />
                     <YAxis domain={[-3, 3]} stroke="#9ca3af" fontSize={10} />
-                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} />
+                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
                     <ReferenceLine y={2} stroke="#ef4444" strokeDasharray="3 3" />
                     <ReferenceLine y={-2} stroke="#3b82f6" strokeDasharray="3 3" />
                     <ReferenceLine y={0} stroke="#22c55e" />
@@ -133,10 +159,10 @@ export const DeepQuantAnalysis = () => {
              </div>
           </section>
 
-          {/* Section 4: Trend Channel */}
+          {/* Section 4: Log-Linear Trend */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-green-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">4. Log-Linear Trend Channel</h2></div>
-             <div className="h-[500px] bg-card border border-border rounded-xl p-4">
+             <div className="h-[500px] bg-card border border-border rounded-xl p-4 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
@@ -144,10 +170,8 @@ export const DeepQuantAnalysis = () => {
                     <YAxis domain={['auto', 'auto']} scale="log" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => `$${v.toFixed(0)}`} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
                     <Legend />
-                    {/* Improved Area filling: only fill between upper and lower */}
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.1} />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
-                    
                     <Line type="monotone" dataKey="price" stroke="currentColor" strokeWidth={1} dot={false} className="text-foreground" name="Price" />
                     <Line type="monotone" dataKey="middle" stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} dot={false} name="Trend" />
                     <Line type="monotone" dataKey="upper" stroke="#ef4444" strokeWidth={1} dot={false} />
