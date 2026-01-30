@@ -37,39 +37,30 @@ def get_market_valuation():
     total_mkt_cap, total_earn = 0, 0
     details = []
     for t in TOP_8:
-        info = yf.Ticker(t).info
-        m = info.get('marketCap', 0)
-        p = info.get('trailingPE', 0)
-        if m and p:
-            e = m / p
-            total_mkt_cap += m
-            total_earn += e
-            details.append({"ticker": t, "pe": p, "market_cap": m})
+        try:
+            info = yf.Ticker(t).info
+            m = info.get('marketCap', 0)
+            p = info.get('trailingPE', 0)
+            if m and p:
+                e = m / p
+                total_mkt_cap += m
+                total_earn += e
+                details.append({"ticker": t, "pe": p, "market_cap": m})
+        except: continue
+    if total_earn == 0: raise HTTPException(status_code=500)
     return {"weighted_pe": total_mkt_cap / total_earn, "details": details}
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
-    """Calculate historical weighted PER for Top 8"""
     data_dict = {}
     for t in TOP_8:
         series = get_data(t, period=period)
-        if series is not None:
-            data_dict[t] = series
-            
+        if series is not None: data_dict[t] = series
     df = pd.DataFrame(data_dict).dropna()
-    # Simplified historical PER: assume current earnings for history (approximation)
-    # For real historical PE, we'd need quarterly earnings data which is complex via yf
-    # We'll use Price / Current Earnings as a trend indicator
     weights = {t: yf.Ticker(t).info.get('marketCap', 1) for t in TOP_8}
     total_weight = sum(weights.values())
-    
-    # Just calculate a price index of top 8 as a proxy for valuation trend
     df['weighted_price'] = sum(df[t] * (weights[t]/total_weight) for t in TOP_8)
-    
-    return {
-        "dates": df.index.strftime('%Y-%m-%d').tolist(),
-        "values": df['weighted_price'].tolist() # This acts as a proxy for valuation trend
-    }
+    return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": df['weighted_price'].tolist()}
 
 @app.get("/api/dca")
 def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
@@ -104,66 +95,68 @@ def get_risk_return(tickers: str):
 
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str):
-    # Fixed Start: 2011-01-01
-    start_date = "2011-01-01"
-    end_date = datetime.now().strftime('%Y-%m-%d')
+    # 1. Fetch 17 years to get 16 years of 252-day periods
+    start_date = (datetime.now() - timedelta(days=365*17)).strftime('%Y-%m-%d')
+    full_series = get_data(ticker, start=start_date)
+    if full_series is None or len(full_series) < 252: raise HTTPException(status_code=404)
     
-    # Get Max data to find the first date
-    full_series = get_data(ticker, period="max")
-    if full_series is None: raise HTTPException(status_code=404)
     first_date = full_series.index[0].strftime('%Y-%m-%d')
     
-    # Sliced data from 2011
-    series = full_series[full_series.index >= pd.Timestamp(start_date)]
-    if len(series) < 10: series = full_series # Fallback if 2011 is too far
+    # 2. Calculate Rolling 252-day Returns (Probability Distribution)
+    # Return = (Price at T+252 / Price at T) - 1
+    rolling_returns = []
+    all_paths = []
     
-    curr_price = float(series.iloc[-1])
-    # Analysis period: last 252 days
-    analysis_series = series.tail(252)
+    for i in range(len(full_series) - 252):
+        segment = full_series.iloc[i : i + 252]
+        ret = (segment.iloc[-1] / segment.iloc[0]) - 1
+        rolling_returns.append(ret * 100)
+        # Normalize path to 100 for Average Path calculation
+        all_paths.append((segment.values / segment.iloc[0]) * 100)
+        
+    avg_return_1y = np.mean(rolling_returns)
+    std_return_1y = np.std(rolling_returns)
     
-    x = np.arange(len(series))
-    log_p = np.log(series.values)
+    # 3. Calculate Average Historical Path (Typical 1-year movement)
+    avg_path = np.mean(all_paths, axis=0).tolist()
+    
+    # 4. Recent Actual 1-year Path (Last 252 days, normalized to 100)
+    recent_segment = full_series.tail(252)
+    recent_actual_path = ((recent_segment.values / recent_segment.iloc[0]) * 100).tolist()
+    
+    # 5. Trend (Log-Linear) on Full Period
+    x = np.arange(len(full_series))
+    log_p = np.log(full_series.values)
     slope, intercept = np.polyfit(x, log_p, 1)
     line = np.exp(slope * x + intercept)
-    std = np.std(log_p - np.log(line))
+    std_resid = np.std(log_p - np.log(line))
     
-    rets = analysis_series.pct_change().dropna()
-    log_rets = np.log(1 + rets)
-    drift = log_rets.mean() - 0.5 * log_rets.var()
-    vol = log_rets.std()
-    
-    sim_days = 120
-    iters = 50
-    paths = np.zeros((sim_days, iters))
-    paths[0] = curr_price
-    for t in range(1, sim_days):
-        paths[t] = paths[t-1] * np.exp(drift + vol * np.random.normal(0, 1, iters))
+    # Histogram for 1-year returns
+    hist_counts, bin_edges = np.histogram(rolling_returns, bins=60)
     
     return {
         "ticker": ticker,
         "first_date": first_date,
-        "current_price": curr_price,
-        "invested_days": len(series),
+        "invested_days": len(full_series),
+        "avg_1y_return": float(avg_return_1y),
         "trend": {
-            "dates": series.index.strftime('%Y-%m-%d').tolist(),
-            "prices": series.values.tolist(),
+            "dates": full_series.index.strftime('%Y-%m-%d').tolist(),
+            "prices": full_series.values.tolist(),
             "middle": line.tolist(),
-            "upper": (line * np.exp(2*std)).tolist(),
-            "lower": (line * np.exp(-2*std)).tolist()
+            "upper": (line * np.exp(2 * std_resid)).tolist(),
+            "lower": (line * np.exp(-2 * std_resid)).tolist()
         },
         "quant": {
-            "mean": float(rets.mean()*100),
-            "std": float(rets.std()*100),
-            "current_z": float((rets.iloc[-1]-rets.mean())/rets.std()) if len(rets)>0 else 0,
-            "z_history": ((series.pct_change()-rets.mean())/rets.std()).fillna(0).tail(100).tolist(),
-            "z_dates": series.tail(100).index.strftime('%Y-%m-%d').tolist(),
-            "bins": np.histogram(rets*100, bins=30)[1].tolist() if len(rets)>0 else [],
-            "counts": np.histogram(rets*100, bins=30)[0].tolist() if len(rets)>0 else []
+            "mean": float(avg_return_1y),
+            "std": float(std_return_1y),
+            "current_z": float((rolling_returns[-1] - avg_return_1y) / std_return_1y) if std_return_1y > 0 else 0,
+            "bins": bin_edges[:-1].tolist(),
+            "counts": hist_counts.tolist()
         },
         "simulation": {
-            "p50": np.percentile(paths, 50, axis=1).tolist(),
-            "samples": paths[:, :10].T.tolist(),
-            "actual_past": series.tail(120).values.tolist()
+            "p50": avg_path,
+            "actual_past": recent_actual_path,
+            "samples": [] # No longer needed for this view
         }
     }
 
