@@ -98,7 +98,7 @@ export const DcaSimulator = () => {
                 <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} tickFormatter={(val) => val?.slice(2)} minTickGap={50} />
                 <YAxis yAxisId="left" stroke="#9ca3af" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
                 <YAxis yAxisId="right" orientation="right" stroke="#6b7280" fontSize={10} tickFormatter={(val) => `$${val}`} hide={false} />
-                <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} formatter={(value: any, name: string) => [name === 'Actual Price' ? `$${value}` : `$${(value || 0).toLocaleString()}`, name]} />
+                <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} formatter={(value: any, name: any) => [name === 'Actual Price' ? `$${value}` : `$${(value || 0).toLocaleString()}`, name]} />
                 <Legend />
                 <Area yAxisId="left" type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorValue)" name="Portfolio Value" strokeWidth={2} />
                 <Area yAxisId="left" type="step" dataKey="invested" stroke="#22c55e" strokeDasharray="5 5" fill="none" name="Invested Capital" strokeWidth={2} />
