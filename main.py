@@ -85,9 +85,19 @@ def get_per_history(period: str = "2y"):
     df = pd.DataFrame(data_dict).ffill().bfill()
     total_mkt_cap = sum(mkt_caps.values())
     weighted_idx = pd.Series(0.0, index=df.index)
+    
+    # Calculate Total Earnings for the group to get a proper weighted PE
+    total_earnings = 0
+    for t in pes:
+        if pes[t] > 0:
+            total_earnings += mkt_caps[t] / pes[t]
+            
+    # True Market PE = Total Market Cap / Total Earnings
+    avg_pe = total_mkt_cap / total_earnings if total_earnings > 0 else 0
+    
     for t in data_dict:
         weighted_idx += (df[t] / df[t].iloc[-1]) * (mkt_caps[t] / total_mkt_cap)
-    avg_pe = sum(pes[t] * mkt_caps[t] for t in pes) / total_mkt_cap
+        
     return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
 
 @app.get("/api/dca")
