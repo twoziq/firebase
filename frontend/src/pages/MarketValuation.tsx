@@ -105,13 +105,13 @@ export const MarketValuation = () => {
               </div>
               
               {/* Hover Details */}
-              <div className="absolute inset-x-0 bottom-0 p-5 bg-card border-t border-border transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 flex flex-col gap-1 text-xs z-20">
+              <div className="absolute inset-x-0 bottom-0 p-4 bg-muted/60 backdrop-blur-md transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 flex flex-col gap-1.5 text-xs z-20 border-t border-white/10">
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Mkt Cap:</span>
+                  <span className="text-muted-foreground font-medium">Mkt Cap</span>
                   <span className="font-bold text-foreground text-right">{formatCurrency(item.market_cap)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Earnings:</span>
+                  <span className="text-muted-foreground font-medium">Earnings</span>
                   <span className="font-bold text-foreground text-right">{formatCurrency(earnings)}</span>
                 </div>
               </div>
