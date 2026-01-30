@@ -36,12 +36,12 @@ export const RiskReturnMap = () => {
       const maxX = Math.max(...risks);
       const minY = Math.min(...rets);
       const maxY = Math.max(...rets);
-      const padX = (maxX - minX) * 0.05 || 2;
-      const padY = (maxY - minY) * 0.05 || 2;
+      // Increased padding to 10% for better visual comfort
+      const padX = (maxX - minX) * 0.1 || 2;
+      const padY = (maxY - minY) * 0.1 || 2;
       return { x: [minX - padX, maxX + padX], y: [minY - padY, maxY + padY] };
     }
     
-    // Default: wide view starting from 0
     return { x: [0, Math.max(80, ...risks) * 1.1], y: [0, Math.max(40, ...rets) * 1.1] };
   };
 
@@ -52,7 +52,7 @@ export const RiskReturnMap = () => {
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('risk')}</h1>
-          <p className="text-muted-foreground text-sm">Click the chart to toggle Zoom (Al-Zal-Ttak-Kal-Sen).</p>
+          <p className="text-muted-foreground text-sm">Click the chart to toggle detailed view.</p>
         </div>
         
         <div className="flex gap-2 w-full max-w-2xl">

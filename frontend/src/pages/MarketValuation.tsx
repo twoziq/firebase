@@ -51,13 +51,23 @@ export const MarketValuation = () => {
             ))}
           </div>
         </div>
-        <div className="h-[300px] bg-card border border-border rounded-xl p-4">
+        <div className="h-[300px] bg-card border border-border rounded-xl p-4 shadow-sm">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-              <XAxis dataKey="date" hide />
-              <YAxis domain={['auto', 'auto']} hide />
-              <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
+              <XAxis 
+                dataKey="date" 
+                stroke="#9ca3af" 
+                fontSize={10} 
+                minTickGap={100}
+                tickFormatter={(v) => v.slice(0, 4)} 
+              />
+              <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={10} tickFormatter={(v) => v.toFixed(1)} />
+              <Tooltip 
+                contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} 
+                labelFormatter={(v) => `Date: ${v}`}
+                formatter={(v: any) => [Number(v || 0).toFixed(1), 'Weighted PER']}
+              />
               <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={3} dot={false} />
             </LineChart>
           </ResponsiveContainer>

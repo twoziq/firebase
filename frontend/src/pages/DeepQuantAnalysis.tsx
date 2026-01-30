@@ -26,6 +26,7 @@ export const DeepQuantAnalysis = () => {
   useEffect(() => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod); }, []);
 
   const handleAnalyzeClick = () => {
+    // Force fetch with current component states
     fetchAnalysis(ticker, startDate, endDate, analysisPeriod);
   };
 
@@ -49,7 +50,10 @@ export const DeepQuantAnalysis = () => {
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[50] py-4 border-b border-border">
         <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
-        <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod); }} isLoading={loading} initialValue={ticker} />
+        <TickerCombobox onSearch={(t) => { 
+          setTicker(t); 
+          fetchAnalysis(t, startDate, endDate, analysisPeriod); 
+        }} isLoading={loading} initialValue={ticker} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
@@ -63,8 +67,8 @@ export const DeepQuantAnalysis = () => {
           <input type="number" value={analysisPeriod} onChange={e => setAnalysisPeriod(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
         </div>
         <div className="flex items-end">
-          <button onClick={handleAnalyzeClick} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90 transition-opacity">
-            {t('analyze')}
+          <button onClick={handleAnalyzeClick} disabled={loading} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90 transition-opacity">
+            {loading ? '...' : t('analyze')}
           </button>
         </div>
       </div>
