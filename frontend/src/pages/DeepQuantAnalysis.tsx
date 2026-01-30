@@ -65,7 +65,7 @@ export const DeepQuantAnalysis = () => {
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[50] py-4 border-b border-border">
         <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
-        <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod); }} isLoading={loading} initialValue={ticker} />
+        <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod, forecastDays); }} isLoading={loading} initialValue={ticker} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
