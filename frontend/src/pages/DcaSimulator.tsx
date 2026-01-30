@@ -97,13 +97,13 @@ export const DcaSimulator = () => {
                 <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
                 <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} tickFormatter={(val) => val?.slice(2)} minTickGap={50} />
                 <YAxis yAxisId="left" stroke="#9ca3af" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
-                {/* Secondary YAxis for Price - Hidden but Auto Scaled for Trend Comparison */}
-                <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} hide={true} />
+                {/* Secondary YAxis for Price - Scale to data range (dataMin/dataMax) to fill height */}
+                <YAxis yAxisId="right" orientation="right" domain={['dataMin', 'dataMax']} hide={true} />
                 <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} formatter={(value: any, name: any) => [name === 'Actual Price' ? `$${value}` : `$${(value || 0).toLocaleString()}`, name]} />
                 <Legend />
                 <Area yAxisId="left" type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorValue)" name="Portfolio Value" strokeWidth={2} />
                 <Area yAxisId="left" type="step" dataKey="invested" stroke="#22c55e" strokeDasharray="5 5" fill="none" name="Invested Capital" strokeWidth={2} />
-                <Area yAxisId="right" type="monotone" dataKey="price" stroke="#6b7280" fill="none" strokeOpacity={0.3} name="Actual Price" strokeWidth={1} dot={false} />
+                <Area yAxisId="right" type="monotone" dataKey="price" stroke="#6b7280" fill="none" strokeOpacity={0.5} name="Actual Price" strokeWidth={1} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
