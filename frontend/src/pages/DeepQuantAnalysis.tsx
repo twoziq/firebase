@@ -159,51 +159,59 @@ export const DeepQuantAnalysis = () => {
              </div>
           </section>
 
-          <section className="space-y-4">
-             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. {t('prob_dist')}</h2></div>
-             <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm relative">
-                <div className="absolute top-6 right-6 bg-card/80 backdrop-blur border border-border px-3 py-1 rounded-lg z-10 shadow-sm">
-                   <span className="text-xs text-muted-foreground font-bold uppercase mr-2">Current Period Return</span>
-                   <span className={`font-black ${data.current_1y_return > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                     {data.current_1y_return > 0 ? '+' : ''}{data.current_1y_return?.toFixed(1)}%
-                   </span>
-                </div>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={histData} barGap={0} barCategoryGap={0}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.05}/>
-                    <XAxis dataKey="bin" stroke="#9ca3af" fontSize={10} minTickGap={30} />
-                    <YAxis stroke="#9ca3af" fontSize={10} />
-                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
-                    <Bar dataKey="count">
-                      {histData.map((entry, index) => {
-                        let color = entry.val > 0 ? "#86efac" : "#93c5fd";
-                        if (data.quant && Math.abs(entry.val - data.quant.mean) > 2 * data.quant.std) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
-                        return <Cell key={index} fill={color} />;
-                      })}
-                    </Bar>
-                    <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
-                    
-                    {/* TODAY Arrow - Custom Marker */}
-                    <ReferenceLine 
-                      x={data.current_1y_return?.toFixed(0) + '%'} 
-                      stroke="#f59e0b" 
-                      strokeWidth={0}
-                      label={({viewBox}) => {
-                        const x = viewBox.x + viewBox.width / 2; // This centers it, but we want it at the specific X value. Recharts handles x prop in customized label.
-                        // Actually, for ReferenceLine label, 'viewBox' is not standard props. ReferenceLine passes props.
-                        // Better to use a standard label with unicode or custom content.
-                        return (
-                          <text x={viewBox.x} y={viewBox.y} dy={-5} fill="#f59e0b" fontSize={14} textAnchor="middle" fontWeight="bold">
-                            ▼
-                          </text>
-                        );
-                      }} 
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-             </div>
-          </section>
-
+                    <section className="space-y-4">
+                       <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. Investment Strategy Comparison (Past Period)</h2></div>
+                       <div className="h-[450px] bg-card border border-border rounded-2xl p-6 shadow-sm">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={(() => {
+                                const chartData: any[] = [];
+                                // Use simulation data calculated for recent period
+                                // actual_past = Lump Sum (Price)
+                                // dca_perf = DCA Value %
+                                // savings_perf = Cash (Flat 100 or Linear?) -> Backend sends 100 flat relative to DCA cost basis?
+                                // Wait, in backend:
+                                // lump_perf = (Price / P0) * 100
+                                // dca_perf = (Value / Cost) * 100
+                                // savings_perf = 100 (Flat)
+                                // This compares "Return %". 
+                                // If user wants "Amount", it's different. 
+                                // "Start point same... compare 3". 
+                                // If we compare Returns, Savings is 0% return (Line at 100).
+                                // Lump Sum is Price Return.
+                                // DCA is DCA Return.
+                                // This fits "Start same".
+                                
+                                const len = data.simulation?.actual_past?.length || 0;
+                                for(let i=0; i<len; i++) {
+                                    chartData.push({
+                                        day: i,
+                                        lump: data.simulation?.actual_past?.[i],
+                                        dca: data.simulation?.dca_perf?.[i],
+                                        savings: data.simulation?.savings_perf?.[i]
+                                    });
+                                }
+                                return chartData;
+                            })()}>
+                              <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
+                              <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} label={{ value: 'Days', position: 'insideBottomRight', offset: -5 }} />
+                              <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} label={{ value: 'Performance (100 = Breakeven)', angle: -90, position: 'insideLeft' }} />
+                              <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} labelFormatter={(v) => `Day: ${v}`} />
+                              <Legend />
+                              <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
+                              
+                              {/* Savings (Green Dotted) - Baseline/Cash */}
+                              <Line type="monotone" dataKey="savings" stroke="#22c55e" strokeWidth={2} strokeDasharray="5 5" dot={false} name="Cash / Savings (0%)" />
+                              
+                              {/* Lump Sum (Grey Blurred) */}
+                              <Line type="monotone" dataKey="lump" stroke="#9ca3af" strokeWidth={2} strokeOpacity={0.5} dot={false} name="Lump Sum (Price)" />
+                              
+                              {/* DCA (Primary) */}
+                              <Line type="monotone" dataKey="dca" stroke="hsl(var(--primary))" strokeWidth={3} dot={false} name="DCA Strategy" />
+                              
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                       </div>
+                    </section>
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-yellow-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">3. {t('z_flow')}</h2></div>
              <div className="h-[300px] bg-card border border-border rounded-2xl p-6 shadow-sm">

@@ -65,14 +65,27 @@ export const RiskReturnMap = () => {
 
       {data.length > 0 && (
         <div className="h-[600px] bg-card border border-border rounded-xl p-4 shadow-sm cursor-pointer relative overflow-hidden" onClick={() => setIsZoomed(!isZoomed)}>
-          <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 opacity-5 pointer-events-none">
-             <div className="bg-red-500"></div><div className="bg-green-500"></div><div className="bg-orange-500"></div><div className="bg-yellow-500"></div>
-          </div>
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+            <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
-              <XAxis type="number" dataKey="risk" stroke="#9ca3af" fontSize={12} domain={domain.x} tickFormatter={(v) => v.toFixed(1)} />
-              <YAxis type="number" dataKey="return" stroke="#9ca3af" fontSize={12} domain={domain.y} tickFormatter={(v) => v.toFixed(1)} />
+              <XAxis 
+                type="number" 
+                dataKey="risk" 
+                stroke="#9ca3af" 
+                fontSize={12} 
+                domain={domain.x} 
+                tickFormatter={(v) => v.toFixed(1)} 
+                label={{ value: 'Risk (Volatility %)', position: 'insideBottom', offset: -10, fill: '#9ca3af' }}
+              />
+              <YAxis 
+                type="number" 
+                dataKey="return" 
+                stroke="#9ca3af" 
+                fontSize={12} 
+                domain={domain.y} 
+                tickFormatter={(v) => v.toFixed(1)} 
+                label={{ value: 'Return (Annual %)', angle: -90, position: 'insideLeft', offset: 10, fill: '#9ca3af' }}
+              />
               <ZAxis range={[100, 100]} />
               <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
                   if (active && payload?.length) {

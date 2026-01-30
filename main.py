@@ -161,60 +161,159 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
     try:
         if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
         
-        # 1. Fetch Data (Full History for Trend & DNA Extraction)
-        # ... (rest of the code) ...
-        
+        # 1. Fetch Data
         prices = get_data(ticker, start=start_date, end=end_date)
         
-        # ... (middle code) ...
+        if prices is None or prices.empty: 
+            raise HTTPException(status_code=404, detail=f"Data not found for {ticker}")
+            
+        prices = prices.ffill().dropna()
+        price_vals = prices.values
         
-        # True Listing Date (Max History Start)
-        true_listing_date = get_listing_date(ticker)
+        if len(price_vals) < 30:
+             raise HTTPException(status_code=400, detail="Not enough data history")
+
+        # --- 2. Simulation (Monte Carlo) ---
+        log_returns = np.log(price_vals[1:] / price_vals[:-1])
+        mu = np.mean(log_returns)
+        sigma = np.std(log_returns)
+        
+        num_simulations = 1000
+        sim_days = forecast_days
+        last_price = price_vals[-1]
+        
+        random_shocks = np.random.normal(0, 1, (num_simulations, sim_days))
+        brownian_motion = np.cumsum(random_shocks, axis=1)
+        time_steps = np.arange(1, sim_days + 1)
+        drift_component = (mu - 0.5 * sigma**2) * time_steps
+        
+        sim_paths = 100 * np.exp(drift_component + sigma * brownian_motion) # Normalize start to 100
+        sim_paths = np.hstack([np.full((num_simulations, 1), 100), sim_paths])
+        
+        p50_path = np.percentile(sim_paths, 50, axis=0).tolist()
+        p95_path = np.percentile(sim_paths, 95, axis=0).tolist()
+        p05_path = np.percentile(sim_paths, 5, axis=0).tolist()
+        samples = sim_paths[:30].tolist()
+        
+        # --- DCA vs Lump Sum Simulation (Past/Recent) ---
+        # Compare 3 strategies over the LAST 'forecast_days' (or period)
+        if len(price_vals) > forecast_days:
+            recent_prices = price_vals[-forecast_days:]
+        else:
+            recent_prices = price_vals
+            
+        # 1. Lump Sum (Actual Price): Start at 100
+        lump_perf = (recent_prices / recent_prices[0] * 100).tolist()
+        
+        # 2. Savings (Cash Accumulation): Linear growth 0 -> 100% of capital?
+        # User said: "Start point same for all three".
+        # Interpretation: We are comparing the VALUE of portfolio.
+        # Lump Sum: Starts with $100 -> Ends with $100 * (P_end/P_start).
+        # Savings: Starts with $100? No, "Daily invested amount".
+        # If "Daily Invested Amount" is Green Dotted, it implies ACCUMULATION.
+        # But if we compare Accumulation vs Lump Sum, the scales are different (0->100 vs 100->?).
+        # User said: "Start point same for all three".
+        # This implies we are comparing 3 scenarios starting with SAME capital $C.
+        # A) Lump Sum: Put $C at start.
+        # B) Savings: Put $C in safe asset (0% interest). Value stays $C.
+        # C) DCA: This is usually "Income stream". But if we must compare with Lump Sum...
+        # Maybe user means: "Value of $1 invested daily" (DCA) vs "Value of $N invested at start" (Lump Sum).
+        # Let's try to interpret "Green dotted = Daily invested amount" literally.
+        # It means the cost basis line for DCA.
+        # If we normalize everything to "Total Invested = 100" at the END?
+        # Or "Start = 100"?
+        # Let's assume standard "Growth of $100" chart for Lump Sum.
+        # For DCA, let's show the growth of a DCA portfolio that reached same total investment? No.
+        
+        # Let's provide the raw relative series for:
+        # 1. Price (Lump Sum) -> Index 100
+        # 2. DCA Value -> If we invested $1 daily, what is value? Scale it so it starts at 100? No, DCA starts at 0.
+        # User said: "Start point same for all three".
+        # This is the key constraint.
+        # If DCA starts at 100, it means we have $100 and we drip feed it? (Reverse DCA / PCA).
+        # Or maybe it's just "Price" vs "Average Cost"?
+        
+        # Let's implement what makes most sense visually for "Start same":
+        # All lines start at 100.
+        # 1. Lump Sum: Track Price.
+        # 2. Savings: Flat line at 100 (Cash held).
+        # 3. DCA: This is hard. DCA return is usually lower volatility.
+        # Let's calculate DCA Return Index: (Current Value / Total Invested) * 100.
+        # This starts at 100 (1st purchase value / 1st purchase cost = 1 = 100).
+        # And evolves. This allows comparing "Efficiency" of DCA vs Lump Sum vs Cash(100).
+        
+        dca_shares = 0
+        dca_cost = 0
+        dca_perf = []
+        for p in recent_prices:
+            dca_shares += 1 / p # Invest $1
+            dca_cost += 1
+            val = dca_shares * p
+            ret = (val / dca_cost) * 100
+            dca_perf.append(ret)
+            
+        savings_perf = [100.0] * len(recent_prices)
+        
+        simulation_data = { 
+            "p50": p50_path, 
+            "upper": p95_path, 
+            "lower": p05_path, 
+            "actual_past": lump_perf, 
+            "dca_perf": dca_perf,
+            "savings_perf": savings_perf,
+            "samples": samples 
+        }
+
+        # --- 3. Quant (Rolling) ---
+        lookback = analysis_period
+        if len(price_vals) > lookback:
+            rolling_rets = (price_vals[lookback:] / price_vals[:-lookback]) - 1
+            rolling_rets_pct = rolling_rets * 100
+            current_ret_pct = rolling_rets_pct[-1]
+            mean_ret = np.mean(rolling_rets_pct)
+            std_ret = np.std(rolling_rets_pct)
+            current_z = (current_ret_pct - mean_ret) / std_ret if std_ret > 0 else 0
+            z_history = ((rolling_rets_pct - mean_ret) / std_ret).tolist()
+            z_dates = prices.index[lookback:].strftime('%Y-%m-%d').tolist()
+            hist_counts, hist_bins = np.histogram(rolling_rets_pct, bins=100)
+        else:
+            mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
+            z_history, z_dates, hist_bins, hist_counts = [], [], [], []
+
+        # --- 4. Trend ---
+        x = np.arange(len(price_vals))
+        slope, intercept = np.polyfit(x, np.log(price_vals), 1)
+        trend_line = np.exp(slope * x + intercept)
+        std_resid = np.std(np.log(price_vals) - np.log(trend_line))
         
         return {
             "ticker": ticker, 
-            "first_date": true_listing_date, # Updated to return TRUE listing date
-            
-            # ... (rest of the return dict) ...
+            "first_date": get_listing_date(ticker),
+            "avg_1y_return": float(mean_ret),
+            "current_1y_return": float(current_ret_pct),
+            "trend": {
+                "dates": prices.index.strftime('%Y-%m-%d').tolist(), 
+                "prices": price_vals.tolist(),
+                "middle": trend_line.tolist(), 
+                "upper": (trend_line * np.exp(2*std_resid)).tolist(), 
+                "lower": (trend_line * np.exp(-2*std_resid)).tolist()
+            },
+            "quant": {
+                "mean": float(mean_ret), 
+                "std": float(std_ret), 
+                "current_z": float(current_z),
+                "z_history": z_history,
+                "z_dates": z_dates,
+                "bins": hist_bins[:-1].tolist(), 
+                "counts": hist_counts.tolist()
+            },
+            "simulation": simulation_data
+        }
     except Exception as e:
         print(f"Error in get_deep_analysis: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-    rolling_rets_pct = rolling_rets * 100
-    num_windows = len(price_vals) - analysis_period
-    step = max(1, num_windows // 500)
-    
-    all_paths = [price_vals[i : i + analysis_period] / price_vals[i] * 100 for i in range(0, num_windows, step)]
-    avg_path = np.mean(all_paths, axis=0).tolist()
-    std_path = np.std(all_paths, axis=0)
-    
-    # 30 random samples for background
-    sample_indices = random.sample(range(len(all_paths)), min(30, len(all_paths)))
-    samples = [all_paths[i].tolist() for i in sample_indices]
-    
-    recent_actual = (price_vals[-analysis_period:] / price_vals[-analysis_period][0] * 100).tolist()
-    
-    x = np.arange(len(price_vals))
-    slope, intercept = np.polyfit(x, np.log(price_vals), 1)
-    line = np.exp(slope * x + intercept)
-    std_resid = np.std(np.log(price_vals) - np.log(line))
-    
-    return {
-        "ticker": ticker, "first_date": prices.index[0].strftime('%Y-%m-%d'), "avg_1y_return": float(np.mean(rolling_rets_pct)),
-        "current_1y_return": float(rolling_rets_pct[-1]),
-        "trend": {
-            "dates": prices.index.strftime('%Y-%m-%d').tolist(), "prices": price_vals.tolist(),
-            "middle": line.tolist(), "upper": (line * np.exp(2*std_resid)).tolist(), "lower": (line * np.exp(-2*std_resid)).tolist()
-        },
-        "quant": {
-            "mean": float(np.mean(rolling_rets_pct)), "std": float(np.std(rolling_rets_pct)), "current_z": float((rolling_rets_pct[-1] - np.mean(rolling_rets_pct)) / np.std(rolling_rets_pct)) if len(rolling_rets_pct)>0 else 0,
-            "z_history": ((prices.pct_change()-prices.pct_change().mean())/prices.pct_change().std()).fillna(0).tail(100).tolist(),
-            "z_dates": prices.tail(100).index.strftime('%Y-%m-%d').tolist(),
-            "bins": np.histogram(rolling_rets_pct, bins=100)[1][:-1].tolist(), "counts": np.histogram(rolling_rets_pct, bins=100)[0].tolist()
-        },
-        "simulation": { "p50": avg_path, "upper": (np.array(avg_path) + 2*std_path).tolist(), "lower": (np.array(avg_path) - 2*std_path).tolist(), "actual_past": recent_actual, "samples": samples }
-    }
 
 if __name__ == "__main__":
     import uvicorn
