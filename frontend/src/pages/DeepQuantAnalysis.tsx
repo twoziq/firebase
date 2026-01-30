@@ -17,18 +17,11 @@ export const DeepQuantAnalysis = () => {
 
   const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number) => {
     setLoading(true);
-    console.log(`[DeepQuant] Start fetching: ${tck}`);
-    
     api.get<DeepAnalysisData>(`/api/deep-analysis/${encodeURIComponent(tck)}`, {
       params: { start_date: sDate, end_date: eDate, analysis_period: period }
     })
-      .then(res => {
-        console.log('[DeepQuant] Data received successfully');
-        setData(res.data);
-      })
-      .catch(err => {
-        console.error('[DeepQuant] API Error:', err.response?.data || err.message);
-      })
+      .then(res => setData(res.data))
+      .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
@@ -36,7 +29,7 @@ export const DeepQuantAnalysis = () => {
 
   const handleAnalyzeClick = () => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod); };
 
-  // --- Safe Data Mapping ---
+  // --- Data Mapping ---
   const trendData = data?.trend?.dates?.map((date, i) => ({
     date, 
     price: data.trend.prices[i], 
@@ -126,9 +119,21 @@ export const DeepQuantAnalysis = () => {
                     <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.05} />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
+                    
+                    {/* Random Samples (30) - HIDDEN FROM LEGEND */}
                     {Array.from({length: 30}).map((_, i) => (
-                      <Line key={i} type="monotone" dataKey={`s${i}`} stroke="#6b7280" strokeWidth={1} strokeOpacity={0.1} dot={false} />
+                      <Line 
+                        key={i} 
+                        type="monotone" 
+                        dataKey={`s${i}`} 
+                        stroke="#6b7280" 
+                        strokeWidth={1} 
+                        strokeOpacity={0.2} 
+                        dot={false} 
+                        legendType="none"
+                      />
                     ))}
+                    
                     <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={4} dot={false} className="text-foreground" name="Recent Moving" />
                     <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={4} dot={false} name="Historical Mean" />
                   </ComposedChart>
@@ -153,7 +158,14 @@ export const DeepQuantAnalysis = () => {
                       })}
                     </Bar>
                     <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
-                    <ReferenceLine x={data.current_1y_return?.toFixed(0) + '%'} stroke="#f59e0b" strokeWidth={2} label={{position: 'top', value: 'Today ▽', fill: '#f59e0b', fontWeight: 'bold'}} />
+                    
+                    {/* TODAY Arrow/Marker - Fixed Alignment */}
+                    <ReferenceLine 
+                      x={data.current_1y_return?.toFixed(0) + '%'} 
+                      stroke="#f59e0b" 
+                      strokeWidth={2} 
+                      label={{position: 'top', value: 'Today ▽', fill: '#f59e0b', fontWeight: 'bold'}} 
+                    />
                   </BarChart>
                 </ResponsiveContainer>
              </div>
