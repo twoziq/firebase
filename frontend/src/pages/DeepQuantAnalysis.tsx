@@ -11,29 +11,30 @@ export const DeepQuantAnalysis = () => {
   const { t } = useLanguage();
   
   const [ticker, setTicker] = useState('^IXIC');
-  const [startDate, setStartDate] = useState('2011-01-01');
+  const [startDate, setStartDate] = useState('2010-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [analysisPeriod, setAnalysisPeriod] = useState(252);
 
   const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number) => {
     setLoading(true);
-    // CRITICAL: Encode ticker to handle characters like ^
-    const encodedTicker = encodeURIComponent(tck);
-    console.log(`[ACTION] Fetching analysis for ${tck} (${encodedTicker})`);
+    console.log(`[DeepQuant] Fetching for ${tck} | Range: ${sDate} ~ ${eDate} | Period: ${period}`);
     
-    api.get<DeepAnalysisData>(`/api/deep-analysis/${encodedTicker}`, {
+    // Using query param instead of path to avoid special character issues like ^
+    api.get<DeepAnalysisData>(`/api/deep-analysis`, {
       params: {
+        ticker: tck,
         start_date: sDate,
         end_date: eDate,
         analysis_period: period
       }
     })
       .then(res => {
-        console.log('[SUCCESS] Deep analysis received');
+        console.log('[DeepQuant] SUCCESS');
         setData(res.data);
       })
       .catch(err => {
-        console.error('[FAILED] Deep analysis request error:', err.message);
+        console.error('[DeepQuant] FAILED:', err.message);
+        alert(`Analysis failed: ${err.message}. Check log button.`);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -63,8 +64,12 @@ export const DeepQuantAnalysis = () => {
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[50] py-4 border-b border-border">
-        <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
-        <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod); }} isLoading={loading} initialValue={ticker} />
+        <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling 1Y Return Analysis</p></div>
+        <TickerCombobox 
+          onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod); }} 
+          isLoading={loading} 
+          initialValue={ticker} 
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
@@ -87,11 +92,11 @@ export const DeepQuantAnalysis = () => {
       {data && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-green-500">
-             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Historical Mean ({analysisPeriod}D)</p>
+             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Rolling Mean Return ({analysisPeriod}D)</p>
              <p className="text-2xl font-black text-green-500">{data.avg_1y_return.toFixed(1)}%</p>
            </div>
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm">
-             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Data Available Since</p>
+             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Analysis Range Since</p>
              <p className="text-xl font-bold text-foreground">{data.first_date}</p>
            </div>
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-primary">
@@ -101,19 +106,19 @@ export const DeepQuantAnalysis = () => {
         </div>
       )}
 
-      {loading && <div className="text-center py-20 text-muted-foreground animate-pulse font-bold">Running Statistics...</div>}
+      {loading && <div className="text-center py-20 text-muted-foreground animate-pulse font-bold">Rolling 16Y Data... Please wait.</div>}
 
       {data && !loading && (
         <>
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">{t('prob_dist')}</h2></div>
-             <div className="h-[350px] bg-card border border-border rounded-xl p-4">
+             <div className="h-[350px] bg-card border border-border rounded-xl p-4 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={histData} barGap={0} barCategoryGap={0}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1}/>
-                    <XAxis dataKey="bin" stroke="#9ca3af" fontSize={10} minTickGap={30} />
+                    <XAxis dataKey="bin" stroke="#9ca3af" fontSize={10} minTickGap={20} />
                     <YAxis stroke="#9ca3af" fontSize={10} />
-                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} />
+                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
                     <Bar dataKey="count">
                       {histData.map((entry, index) => {
                         let color = entry.val > 0 ? "#86efac" : "#93c5fd";
@@ -129,11 +134,17 @@ export const DeepQuantAnalysis = () => {
 
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. Historical Typical Path vs Recent</h2></div>
-             <div className="h-[400px] bg-card border border-border rounded-xl p-4">
+             <div className="h-[400px] bg-card border border-border rounded-xl p-4 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={simData}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} /><XAxis dataKey="day" stroke="#9ca3af" fontSize={12} /><YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} tickFormatter={(v) => `${v.toFixed(0)}`} /><Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} /><Legend />
-                    <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" /><Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={3} dot={false} className="text-foreground" name={`Recent ${analysisPeriod}D`} /><Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Historical Mean Path" />
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                    <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} />
+                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} tickFormatter={(v) => `${v.toFixed(0)}`} />
+                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
+                    <Legend />
+                    <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
+                    <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={3} dot={false} className="text-foreground" name={`Recent ${analysisPeriod}D`} />
+                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Historical Mean Path" />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>
@@ -155,7 +166,7 @@ export const DeepQuantAnalysis = () => {
              <div className="h-[500px] bg-card border border-border rounded-xl p-4 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendData}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} /><XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={50} tickFormatter={(v) => v.slice(0, 4)} /><YAxis domain={['auto', 'auto']} scale="log" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => `$${v.toFixed(0)}`} /><Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} /><Legend />
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} /><XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={50} tickFormatter={(v) => v.slice(0, 4)} /><YAxis domain={['auto', 'auto']} scale="log" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => `$${v.toFixed(0)}`} /><Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} /><Legend />
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.1} /><Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
                     <Line type="monotone" dataKey="price" stroke="currentColor" strokeWidth={1} dot={false} className="text-foreground" name="Price" /><Line type="monotone" dataKey="middle" stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} dot={false} name="Trend" /><Line type="monotone" dataKey="upper" stroke="#ef4444" strokeWidth={1} dot={false} /><Line type="monotone" dataKey="lower" stroke="#3b82f6" strokeWidth={1} dot={false} />
                   </ComposedChart>
