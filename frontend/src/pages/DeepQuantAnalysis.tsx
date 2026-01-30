@@ -83,9 +83,11 @@ export const DeepQuantAnalysis = () => {
         <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, periodDays); }} isLoading={loading} initialValue={ticker} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm items-start">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+          {data?.first_date && <p className="text-[10px] text-muted-foreground mt-1">Listing Date: {data.first_date}</p>}
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
@@ -93,7 +95,8 @@ export const DeepQuantAnalysis = () => {
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Period (Days)</label>
           <input type="number" value={periodDays} onChange={e => setPeriodDays(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
-        <div className="flex items-end">
+        <div className="space-y-1"></div>
+        <div className="flex items-end h-full pb-1">
           <button onClick={handleAnalyzeClick} disabled={loading} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90">
             {loading ? '...' : t('analyze')}
           </button>
@@ -101,15 +104,10 @@ export const DeepQuantAnalysis = () => {
       </div>
 
       {data && !loading && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-green-500">
-             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Rolling Mean Return ({periodDays}D)</p>
+             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Avg Period Return ({periodDays}D)</p>
              <p className="text-2xl font-black text-green-500">{data.avg_1y_return?.toFixed(1)}%</p>
-           </div>
-           <div className="bg-card border border-border p-4 rounded-xl shadow-sm relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-2 opacity-10"><BarChart3 size={100}/></div>
-             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Data Since</p>
-             <p className="text-lg font-bold text-foreground">{data.first_date}</p>
            </div>
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-primary">
              <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Current Z-Score</p>
@@ -123,28 +121,40 @@ export const DeepQuantAnalysis = () => {
       {data && !loading && (
         <>
           <section className="space-y-4">
-             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">1. Future Simulation (Monte Carlo)</h2></div>
+             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">1. Simulation Comparison (Past vs Future Model)</h2></div>
              <div className="h-[450px] bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={simulationChartData}>
+                  <ComposedChart data={(() => {
+                      const chartData: any[] = [];
+                      const len = Math.max(data.simulation?.p50?.length || 0, data.simulation?.actual_past?.length || 0);
+                      for(let i=0; i<len; i++) {
+                          const obj: any = { day: i };
+                          if (data.simulation?.p50?.[i] !== undefined) {
+                              obj.p50 = data.simulation.p50[i];
+                              obj.upper = data.simulation.upper?.[i];
+                              obj.lower = data.simulation.lower?.[i];
+                          }
+                          if (data.simulation?.actual_past?.[i] !== undefined) {
+                              obj.actual = data.simulation.actual_past[i];
+                          }
+                          chartData.push(obj);
+                      }
+                      return chartData;
+                  })()}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
-                    <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} label={{ value: 'Days (0=Today)', position: 'insideBottomRight', offset: -5 }} type="number" domain={['auto', 'auto']} />
-                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} label={{ value: 'Normalized Price (100=Start)', angle: -90, position: 'insideLeft' }} />
-                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} labelFormatter={(v) => `Day: ${v}`} itemSorter={(item) => item.name === 'Current Trajectory' ? -1 : 1} />
+                    <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} label={{ value: 'Days', position: 'insideBottomRight', offset: -5 }} type="number" />
+                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} label={{ value: 'Normalized (100=Start)', angle: -90, position: 'insideLeft' }} />
+                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} labelFormatter={(v) => `Day ${v}`} />
                     <Legend />
-                    <ReferenceLine x={0} stroke="#6b7280" strokeDasharray="3 3" />
+                    <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
                     
-                    {/* Future Cone */}
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.05} />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
                     
-                    {/* Random Samples - HIDDEN */}
-                    {Array.from({length: 30}).map((_, i) => (
-                      <Line key={i} type="monotone" dataKey={`s${i}`} stroke="#6b7280" strokeWidth={1} strokeOpacity={0.1} dot={false} legendType="none" />
-                    ))}
-                    
-                    <Line type="monotone" dataKey="actual" stroke="#000000" strokeWidth={3} dot={false} name="Current Trajectory" />
-                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} strokeDasharray="5 5" dot={false} name={`Projected Mean (+${data.avg_1y_return?.toFixed(1)}%)`} />
+                    <Line type="monotone" dataKey="actual" stroke="#000000" strokeWidth={3} dot={false} 
+                          name={`Current Trajectory (${data.simulation?.actual_past ? (data.simulation.actual_past[data.simulation.actual_past.length-1] - 100).toFixed(1) : 0}%)`} />
+                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} strokeDasharray="5 5" dot={false} 
+                          name={`Projected Mean (${data.simulation?.p50 ? (data.simulation.p50[data.simulation.p50.length-1] - 100).toFixed(1) : 0}%)`} />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>
@@ -152,7 +162,13 @@ export const DeepQuantAnalysis = () => {
 
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. {t('prob_dist')}</h2></div>
-             <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm">
+             <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm relative">
+                <div className="absolute top-6 right-6 bg-card/80 backdrop-blur border border-border px-3 py-1 rounded-lg z-10 shadow-sm">
+                   <span className="text-xs text-muted-foreground font-bold uppercase mr-2">Current Period Return</span>
+                   <span className={`font-black ${data.current_1y_return > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                     {data.current_1y_return > 0 ? '+' : ''}{data.current_1y_return?.toFixed(1)}%
+                   </span>
+                </div>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={histData} barGap={0} barCategoryGap={0}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.05}/>
@@ -168,7 +184,6 @@ export const DeepQuantAnalysis = () => {
                     </Bar>
                     <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
                     
-                    {/* TODAY Arrow - Bottom */}
                     <ReferenceLine 
                       x={data.current_1y_return?.toFixed(0) + '%'} 
                       stroke="#f59e0b" 
