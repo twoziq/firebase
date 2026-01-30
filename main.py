@@ -3,10 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from functools import lru_cache
-from typing import List, Dict, Optional
+import time
+from typing import List, Dict, Optional, Any
 
 app = FastAPI(title="Twoziq Finance API")
 
@@ -23,13 +24,11 @@ KST = pytz.timezone('Asia/Seoul')
 TOP_8 = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO']
 
 @lru_cache(maxsize=128)
-def get_data(ticker: str, period: str = "max", start: str = None, end: str = None):
+def get_data(ticker: str, start: str = None, end: str = None):
     try:
-        df = yf.download(ticker, period=period, start=start, end=end, progress=False)
+        df = yf.download(ticker, start=start, end=end, progress=False)
         if df.empty: return None
-        if isinstance(df.columns, pd.MultiIndex):
-            return df['Close'].iloc[:, 0] if 'Close' in df.columns else df.iloc[:, 0]
-        return df['Close'] if 'Close' in df.columns else df.iloc[:, 0]
+        return df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
     except: return None
 
 @app.get("/api/market/valuation")
@@ -40,126 +39,107 @@ def get_market_valuation():
         try:
             info = yf.Ticker(t).info
             m = info.get('marketCap', 0)
-            p = info.get('trailingPE', 0)
-            if m and p:
-                e = m / p
+            p = info.get('trailingPE') or info.get('forwardPE', 30)
+            if m > 0:
                 total_mkt_cap += m
-                total_earn += e
+                total_earn += m / p
                 details.append({"ticker": t, "pe": p, "market_cap": m})
         except: continue
-    if total_earn == 0: raise HTTPException(status_code=500)
-    return {"weighted_pe": total_mkt_cap / total_earn, "details": details}
+    return {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
     data_dict = {}
+    mkt_caps = {}
+    pes = {}
     for t in TOP_8:
-        series = get_data(t, period=period)
-        if series is not None: data_dict[t] = series
-    df = pd.DataFrame(data_dict).dropna()
-    weights = {t: yf.Ticker(t).info.get('marketCap', 1) for t in TOP_8}
-    total_weight = sum(weights.values())
-    df['weighted_price'] = sum(df[t] * (weights[t]/total_weight) for t in TOP_8)
-    return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": df['weighted_price'].tolist()}
-
-@app.get("/api/dca")
-def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
-    series = get_data(ticker, start=start_date, end=end_date)
-    if series is None or series.empty: raise HTTPException(status_code=404)
-    total_invested, total_shares = 0, 0
-    dates, invested_curve, valuation_curve = [], [], []
-    freq_map = {"daily": "D", "weekly": "W-MON", "monthly": "MS"}
-    buy_dates = pd.date_range(start=start_date, end=end_date, freq=freq_map.get(frequency, "MS")).strftime('%Y-%m-%d').tolist()
-    last_buy = ""
-    for date, price in series.items():
-        curr = date.strftime('%Y-%m-%d')
-        if any(d <= curr for d in buy_dates) and last_buy < max([d for d in buy_dates if d <= curr], default=""):
-            total_shares += amount / price
-            total_invested += amount
-            last_buy = max([d for d in buy_dates if d <= curr])
-        dates.append(curr)
-        invested_curve.append(total_invested)
-        valuation_curve.append(total_shares * price)
-    return {"ticker": ticker, "total_invested": total_invested, "final_value": valuation_curve[-1], "return_pct": ((valuation_curve[-1]-total_invested)/total_invested*100), "dates": dates, "invested_curve": invested_curve, "valuation_curve": valuation_curve}
+        try:
+            info = yf.Ticker(t).info
+            mkt_caps[t] = info.get('marketCap', 1)
+            pes[t] = info.get('trailingPE') or info.get('forwardPE', 30)
+            series = yf.download(t, period=period, progress=False)
+            if not series.empty:
+                data_dict[t] = series['Close'].iloc[:, 0] if isinstance(series.columns, pd.MultiIndex) else series['Close']
+        except: continue
+    if not data_dict: return {"dates": [], "values": []}
+    df = pd.DataFrame(data_dict).ffill().bfill()
+    total_mkt_cap = sum(mkt_caps.values())
+    weighted_idx = pd.Series(0.0, index=df.index)
+    for t in data_dict:
+        weighted_idx += (df[t] / df[t].iloc[-1]) * (mkt_caps[t] / total_mkt_cap)
+    avg_pe = sum(pes[t] * mkt_caps[t] for t in pes) / total_mkt_cap
+    return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
 
 @app.get("/api/risk-return")
 def get_risk_return(tickers: str):
     ticker_list = [t.strip().upper() for t in tickers.replace(' ', ',').split(',') if t.strip()]
     result = []
     for t in ticker_list:
-        series = get_data(t, period="1y")
-        if series is None or len(series) < 50: continue
-        rets = series.pct_change().dropna()
-        result.append({"ticker": t, "return": round(float(rets.mean()*252*100), 1), "risk": round(float(rets.std()*np.sqrt(252)*100), 1)})
+        try:
+            series = yf.download(t, period="1y", progress=False)
+            if series.empty: continue
+            price = series['Close'].iloc[:, 0] if isinstance(series.columns, pd.MultiIndex) else series['Close']
+            rets = price.pct_change().dropna()
+            result.append({"ticker": t, "return": round(float(rets.mean()*252*100), 1), "risk": round(float(rets.std()*np.sqrt(252)*100), 1)})
+        except: continue
     return result
 
 @app.get("/api/deep-analysis/{ticker}")
-def get_deep_analysis(ticker: str):
-    # 1. Fetch 17 years to get 16 years of 252-day periods
-    start_date = (datetime.now() - timedelta(days=365*17)).strftime('%Y-%m-%d')
-    full_series = get_data(ticker, start=start_date)
-    if full_series is None or len(full_series) < 252: raise HTTPException(status_code=404)
+def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252):
+    if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
+    fetch_start = (datetime.strptime(start_date, '%Y-%m-%d') - timedelta(days=analysis_period + 100)).strftime('%Y-%m-%d')
     
-    first_date = full_series.index[0].strftime('%Y-%m-%d')
+    df = yf.download(ticker, start=fetch_start, end=end_date, progress=False)
+    if df.empty: raise HTTPException(status_code=404, detail="No data found")
     
-    # 2. Calculate Rolling 252-day Returns (Probability Distribution)
-    # Return = (Price at T+252 / Price at T) - 1
-    rolling_returns = []
-    all_paths = []
+    prices = df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
+    prices = prices.ffill().dropna()
     
-    for i in range(len(full_series) - 252):
-        segment = full_series.iloc[i : i + 252]
-        ret = (segment.iloc[-1] / segment.iloc[0]) - 1
-        rolling_returns.append(ret * 100)
-        # Normalize path to 100 for Average Path calculation
-        all_paths.append((segment.values / segment.iloc[0]) * 100)
-        
-    avg_return_1y = np.mean(rolling_returns)
-    std_return_1y = np.std(rolling_returns)
+    if len(prices) < analysis_period: raise HTTPException(status_code=400, detail="Data too short")
+
+    first_date = prices.index[0].strftime('%Y-%m-%d')
+    price_vals = prices.values
     
-    # 3. Calculate Average Historical Path (Typical 1-year movement)
-    avg_path = np.mean(all_paths, axis=0).tolist()
+    # Vectorized Rolling Returns
+    rolling_rets = (price_vals[analysis_period:] / price_vals[:-analysis_period]) - 1
+    rolling_rets_pct = rolling_rets * 100
     
-    # 4. Recent Actual 1-year Path (Last 252 days, normalized to 100)
-    recent_segment = full_series.tail(252)
-    recent_actual_path = ((recent_segment.values / recent_segment.iloc[0]) * 100).tolist()
+    # Average Path Calculation (Optimized)
+    num_windows = len(price_vals) - analysis_period
+    step = max(1, num_windows // 500)
+    paths = [price_vals[i : i + analysis_period] / price_vals[i] * 100 for i in range(0, num_windows, step)]
     
-    # 5. Trend (Log-Linear) on Full Period
-    x = np.arange(len(full_series))
-    log_p = np.log(full_series.values)
+    avg_path = np.mean(paths, axis=0).tolist()
+    recent_segment = price_vals[-analysis_period:]
+    recent_actual_path = (recent_segment / recent_segment[0] * 100).tolist()
+    
+    # Trend
+    x = np.arange(len(price_vals))
+    log_p = np.log(price_vals)
     slope, intercept = np.polyfit(x, log_p, 1)
     line = np.exp(slope * x + intercept)
     std_resid = np.std(log_p - np.log(line))
     
-    # Histogram for 1-year returns
-    hist_counts, bin_edges = np.histogram(rolling_returns, bins=60)
+    hist_counts, bin_edges = np.histogram(rolling_rets_pct, bins=100)
     
     return {
-        "ticker": ticker,
-        "first_date": first_date,
-        "invested_days": len(full_series),
-        "avg_1y_return": float(avg_return_1y),
+        "ticker": ticker, "first_date": first_date, "invested_days": len(prices),
+        "avg_1y_return": float(np.mean(rolling_rets_pct)),
         "trend": {
-            "dates": full_series.index.strftime('%Y-%m-%d').tolist(),
-            "prices": full_series.values.tolist(),
+            "dates": prices.index.strftime('%Y-%m-%d').tolist(),
+            "prices": price_vals.tolist(),
             "middle": line.tolist(),
             "upper": (line * np.exp(2 * std_resid)).tolist(),
             "lower": (line * np.exp(-2 * std_resid)).tolist()
         },
         "quant": {
-            "mean": float(avg_return_1y),
-            "std": float(std_return_1y),
-            "current_z": float((rolling_returns[-1] - avg_return_1y) / std_return_1y) if std_return_1y > 0 else 0,
+            "mean": float(np.mean(rolling_rets_pct)),
+            "std": float(np.std(rolling_rets_pct)),
+            "current_z": float((rolling_rets_pct[-1] - np.mean(rolling_rets_pct)) / np.std(rolling_rets_pct)) if len(rolling_rets_pct)>0 else 0,
+            "z_history": ((prices.pct_change()-prices.pct_change().mean())/prices.pct_change().std()).fillna(0).tail(100).tolist(),
+            "z_dates": prices.tail(100).index.strftime('%Y-%m-%d').tolist(),
             "bins": bin_edges[:-1].tolist(),
             "counts": hist_counts.tolist()
         },
-        "simulation": {
-            "p50": avg_path,
-            "actual_past": recent_actual_path,
-            "samples": [] # No longer needed for this view
-        }
+        "simulation": { "p50": avg_path, "actual_past": recent_actual_path }
     }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)

@@ -17,12 +17,11 @@ export const DeepQuantAnalysis = () => {
 
   const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number) => {
     setLoading(true);
-    console.log(`[DeepQuant] Fetching for ${tck} | Range: ${sDate} ~ ${eDate} | Period: ${period}`);
+    const encodedTicker = encodeURIComponent(tck);
+    console.log(`[DeepQuant] Fetching for ${tck} (${encodedTicker})`);
     
-    // Using query param instead of path to avoid special character issues like ^
-    api.get<DeepAnalysisData>(`/api/deep-analysis`, {
+    api.get<DeepAnalysisData>(`/api/deep-analysis/${encodedTicker}`, {
       params: {
-        ticker: tck,
         start_date: sDate,
         end_date: eDate,
         analysis_period: period
