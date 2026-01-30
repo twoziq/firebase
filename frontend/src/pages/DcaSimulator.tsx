@@ -20,10 +20,12 @@ export const DcaSimulator = () => {
     setLoading(true);
     if (selectedTicker !== ticker) setTicker(selectedTicker);
     
-    console.log(`[DCA] Fetching for ${selectedTicker}`);
+    const encodedTicker = encodeURIComponent(selectedTicker);
+    console.log(`[DCA] Fetching for ${selectedTicker} (${encodedTicker})`);
+    
     api.get<DcaData>(`/api/dca`, {
       params: { 
-        ticker: selectedTicker, 
+        ticker: selectedTicker, // Using ticker as query param since main.py defines it that way for /api/dca
         start_date: startDate, 
         end_date: endDate, 
         amount: Number(amount), 
