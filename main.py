@@ -144,19 +144,73 @@ def get_risk_return(tickers: str):
 
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252):
-    if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
-    df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-    if df.empty: raise HTTPException(status_code=404)
-    prices = df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
-    prices = prices.ffill().dropna()
-    price_vals = prices.values
-    if len(price_vals) < analysis_period:
-        df = yf.download(ticker, period="max", progress=False)
-        prices = df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
-        price_vals = prices.ffill().dropna().values
-        if len(price_vals) < analysis_period: raise HTTPException(status_code=400)
+    try:
+        if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # Use robust get_data function
+        prices = get_data(ticker, start=start_date, end=end_date)
+        
+        if prices is None or prices.empty: 
+            print(f"Deep Analysis: Data not found for {ticker}")
+            raise HTTPException(status_code=404, detail=f"Data not found for {ticker}")
+            
+        prices = prices.ffill().dropna()
+        price_vals = prices.values
+        
+        # If data is too short, try fetching max period
+        if len(price_vals) < analysis_period:
+            print(f"Data too short for {ticker} ({len(price_vals)}), fetching max period...")
+            # Force fetch max period by passing specific very old date or relying on fallback inside get_data if we modify it.
+            # Here we just call get_data with None to trigger logic if implemented, but current get_data logic with None start/end uses 'max' only in fallback.
+            # Let's explicitly try fallback style directly or just ask get_data with very old start
+            prices = get_data(ticker, start="1990-01-01") 
+            
+            if prices is None: raise HTTPException(status_code=404)
+            prices = prices.ffill().dropna()
+            price_vals = prices.values
+            if len(price_vals) < analysis_period: 
+                raise HTTPException(status_code=400, detail=f"Data history too short ({len(price_vals)} days) for analysis")
 
-    rolling_rets = (price_vals[analysis_period:] / price_vals[:-analysis_period]) - 1
+        rolling_rets = (price_vals[analysis_period:] / price_vals[:-analysis_period]) - 1
+        rolling_rets_pct = rolling_rets * 100
+        num_windows = len(price_vals) - analysis_period
+        step = max(1, num_windows // 500)
+        
+        all_paths = [price_vals[i : i + analysis_period] / price_vals[i] * 100 for i in range(0, num_windows, step)]
+        avg_path = np.mean(all_paths, axis=0).tolist()
+        std_path = np.std(all_paths, axis=0)
+        
+        # 30 random samples for background
+        sample_indices = random.sample(range(len(all_paths)), min(30, len(all_paths)))
+        samples = [all_paths[i].tolist() for i in sample_indices]
+        
+        recent_actual = (price_vals[-analysis_period:] / price_vals[-analysis_period] * 100).tolist()
+        
+        x = np.arange(len(price_vals))
+        slope, intercept = np.polyfit(x, np.log(price_vals), 1)
+        line = np.exp(slope * x + intercept)
+        std_resid = np.std(np.log(price_vals) - np.log(line))
+        
+        return {
+            "ticker": ticker, "first_date": prices.index[0].strftime('%Y-%m-%d'), "avg_1y_return": float(np.mean(rolling_rets_pct)),
+            "current_1y_return": float(rolling_rets_pct[-1]),
+            "trend": {
+                "dates": prices.index.strftime('%Y-%m-%d').tolist(), "prices": price_vals.tolist(),
+                "middle": line.tolist(), "upper": (line * np.exp(2*std_resid)).tolist(), "lower": (line * np.exp(-2*std_resid)).tolist()
+            },
+            "quant": {
+                "mean": float(np.mean(rolling_rets_pct)), "std": float(np.std(rolling_rets_pct)), "current_z": float((rolling_rets_pct[-1] - np.mean(rolling_rets_pct)) / np.std(rolling_rets_pct)) if len(rolling_rets_pct)>0 else 0,
+                "z_history": ((prices.pct_change()-prices.pct_change().mean())/prices.pct_change().std()).fillna(0).tail(100).tolist(),
+                "z_dates": prices.tail(100).index.strftime('%Y-%m-%d').tolist(),
+                "bins": np.histogram(rolling_rets_pct, bins=100)[1][:-1].tolist(), "counts": np.histogram(rolling_rets_pct, bins=100)[0].tolist()
+            },
+            "simulation": { "p50": avg_path, "upper": (np.array(avg_path) + 2*std_path).tolist(), "lower": (np.array(avg_path) - 2*std_path).tolist(), "actual_past": recent_actual, "samples": samples }
+        }
+    except Exception as e:
+        print(f"Error in get_deep_analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
     rolling_rets_pct = rolling_rets * 100
     num_windows = len(price_vals) - analysis_period
     step = max(1, num_windows // 500)
