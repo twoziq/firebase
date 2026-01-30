@@ -1,12 +1,9 @@
 export interface MarketValuationData {
   weighted_pe: number;
-  total_market_cap: number;
-  top_8_tickers: string[];
   details: {
     ticker: string;
     pe: number;
     market_cap: number;
-    earnings: number;
   }[];
 }
 
@@ -24,13 +21,13 @@ export interface RiskReturnData {
   ticker: string;
   return: number;
   risk: number;
-  current_price: number;
 }
 
 export interface DeepAnalysisData {
   ticker: string;
+  first_date: string;
   current_price: number;
-  current_return: number;
+  invested_days: number;
   trend: {
     dates: string[];
     prices: number[];

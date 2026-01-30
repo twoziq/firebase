@@ -3,7 +3,6 @@ import { TickerCombobox } from '../components/TickerCombobox';
 import { api } from '../lib/api';
 import type { DeepAnalysisData } from '../lib/types';
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Area, BarChart, Bar, ReferenceLine, Cell } from 'recharts';
-import { cn } from '../lib/utils';
 import { useLanguage } from '../components/LanguageProvider';
 
 export const DeepQuantAnalysis = () => {
