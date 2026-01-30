@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import type { DeepAnalysisData } from '../lib/types';
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Area, BarChart, Bar, ReferenceLine, Cell } from 'recharts';
 import { useLanguage } from '../components/LanguageProvider';
+import { BarChart3 } from 'lucide-react';
 
 export const DeepQuantAnalysis = () => {
   const [data, setData] = useState<DeepAnalysisData | null>(null);
@@ -32,7 +33,7 @@ export const DeepQuantAnalysis = () => {
 
   // --- Data Mapping ---
   // Chart 1: Simulation (Past + Future)
-  const simulationChartData = [];
+  const simulationChartData: any[] = [];
   if (data?.simulation) {
      // Past Data (Negative Days)
      if (data.simulation.actual_past) {
