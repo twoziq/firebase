@@ -5,6 +5,7 @@ interface TickerComboboxProps {
   onSearch: (ticker: string) => void;
   isLoading?: boolean;
   placeholder?: string;
+  initialValue?: string;
 }
 
 const PRESETS = [
@@ -15,12 +16,15 @@ const PRESETS = [
   { symbol: 'SCHD', name: 'Schwab US Dividend ETF' },
 ];
 
-export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbol (e.g., AAPL)" }: TickerComboboxProps) => {
-  const [value, setValue] = useState('');
+export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbol", initialValue = '' }: TickerComboboxProps) => {
+  const [value, setValue] = useState(initialValue);
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (initialValue) setValue(initialValue);
+  }, [initialValue]);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
@@ -39,73 +43,39 @@ export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbo
     }
   };
 
-  const handleSelect = (symbol: string) => {
-    setValue(symbol);
-    onSearch(symbol);
-    setIsOpen(false);
-  };
-
   return (
-    <div className="relative w-full max-w-md" ref={wrapperRef}>
+    <div className="relative w-full max-w-md" ref={wrapperRef} style={{ zIndex: 100 }}>
       <form onSubmit={handleSubmit} className="relative">
         <div className="relative flex items-center">
           <Search className="absolute left-3 text-muted-foreground" size={18} />
-          
           <input
             type="text"
             value={value}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setIsOpen(true);
-            }}
+            onChange={(e) => { setValue(e.target.value); setIsOpen(true); }}
             onFocus={() => setIsOpen(true)}
             placeholder={placeholder}
             disabled={isLoading}
-            className="w-full bg-background border border-input rounded-lg py-2 pl-10 pr-10 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all disabled:opacity-50"
+            className="w-full bg-card border border-input rounded-lg py-2 pl-10 pr-10 text-foreground focus:ring-2 focus:ring-primary transition-all opacity-100"
           />
-          
-          <button
-            type="button"
-            onClick={() => !isLoading && setIsOpen(!isOpen)}
-            disabled={isLoading}
-            className="absolute right-2 p-1 hover:bg-muted rounded-md transition-colors disabled:opacity-50"
-          >
+          <button type="button" onClick={() => !isLoading && setIsOpen(!isOpen)} className="absolute right-2 p-1 hover:bg-muted rounded-md">
             <ChevronDown size={16} className="text-muted-foreground" />
           </button>
         </div>
       </form>
 
-      {/* Dropdown Menu */}
       {isOpen && !isLoading && (
-        <div className="absolute z-50 w-full mt-2 bg-popover border border-border rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="py-1 bg-popover">
-            <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/50">
-              Popular Indices
-            </div>
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.symbol}
-                onClick={() => handleSelect(preset.symbol)}
-                className="w-full text-left px-3 py-2.5 hover:bg-accent hover:text-accent-foreground flex items-center justify-between group transition-colors"
-              >
-                <div className="flex flex-col">
-                  <span className="font-medium text-foreground">{preset.symbol}</span>
-                  <span className="text-xs text-muted-foreground">{preset.name}</span>
-                </div>
-                {value.toUpperCase() === preset.symbol && (
-                  <Check size={16} className="text-primary" />
-                )}
+        <div className="absolute left-0 right-0 z-[110] mt-2 bg-card border border-border rounded-lg shadow-2xl overflow-hidden opacity-100">
+          <div className="py-1 bg-card">
+            <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase bg-muted/50">Presets</div>
+            {PRESETS.map((p) => (
+              <button key={p.symbol} onClick={() => { setValue(p.symbol); onSearch(p.symbol); setIsOpen(false); }} className="w-full text-left px-3 py-2 hover:bg-accent flex items-center justify-between">
+                <div className="flex flex-col"><span className="font-medium text-foreground">{p.symbol}</span><span className="text-xs text-muted-foreground">{p.name}</span></div>
+                {value.toUpperCase() === p.symbol && <Check size={16} className="text-primary" />}
               </button>
             ))}
-            
-            {value && !PRESETS.some(p => p.symbol === value.toUpperCase()) && (
-              <button
-                onClick={() => handleSubmit()}
-                className="w-full text-left px-3 py-2.5 hover:bg-accent hover:text-accent-foreground border-t border-border mt-1"
-              >
-                <span className="text-sm text-foreground">
-                  Search for <span className="font-bold text-primary">"{value.toUpperCase()}"</span>
-                </span>
+            {value && (
+              <button onClick={() => handleSubmit()} className="w-full text-left px-3 py-2 hover:bg-accent border-t border-border">
+                Search <span className="font-bold text-primary">"{value.toUpperCase()}"</span>
               </button>
             )}
           </div>

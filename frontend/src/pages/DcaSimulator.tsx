@@ -45,7 +45,7 @@ export const DcaSimulator = () => {
           <h1 className="text-2xl font-bold text-foreground">{t('dca')}</h1>
           <p className="text-muted-foreground">{t('amount')}: ${amount.toLocaleString()} / {t(frequency)}</p>
         </div>
-        <TickerCombobox onSearch={handleSearch} isLoading={loading} placeholder={t('ticker_placeholder')} />
+        <TickerCombobox onSearch={handleSearch} isLoading={loading} placeholder={t('ticker_placeholder')} initialValue={ticker} />
       </div>
 
       {/* Input Panel */}
