@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
-import { RiskReturnData } from '../lib/types';
-import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, Label, ZAxis } from 'recharts';
+import type { RiskReturnData } from '../lib/types';
+import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, LabelList, ZAxis } from 'recharts';
 
 export const RiskReturnMap = () => {
   const [tickerInput, setTickerInput] = useState('AAPL, TSLA, NVDA, SPY, QQQ, AMZN, GOOGL, META, MSFT, AVGO');
@@ -62,7 +62,7 @@ export const RiskReturnMap = () => {
                 cursor={{ strokeDasharray: '3 3' }} 
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
-                    const d = payload[0].payload;
+                    const d = payload[0].payload as RiskReturnData;
                     return (
                       <div className="bg-popover border border-border p-3 rounded-lg shadow-lg">
                         <p className="font-bold text-foreground">{d.ticker}</p>
@@ -76,13 +76,7 @@ export const RiskReturnMap = () => {
                 }}
               />
               <Scatter name="Stocks" data={data} fill="hsl(var(--primary))">
-                {/* Labels on dots */}
-                {data.map((entry, index) => (
-                  <Label key={index} dataKey="ticker" position="top" offset={10} content={(props: any) => {
-                       const { x, y, value } = props;
-                       return <text x={x} y={y} dy={-10} fill="currentColor" textAnchor="middle" fontSize={12} className="text-foreground font-semibold">{entry.ticker}</text>
-                  }} />
-                ))}
+                <LabelList dataKey="ticker" position="top" offset={10} style={{ fill: 'currentColor', fontSize: '12px', fontWeight: 'bold' }} />
               </Scatter>
             </ScatterChart>
           </ResponsiveContainer>

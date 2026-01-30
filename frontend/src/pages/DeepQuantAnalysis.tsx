@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TickerCombobox } from '../components/TickerCombobox';
 import { api } from '../lib/api';
-import { DeepAnalysisData } from '../lib/types';
+import type { DeepAnalysisData } from '../lib/types';
 import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Area, BarChart, Bar, ReferenceLine } from 'recharts';
 import { cn } from '../lib/utils';
 

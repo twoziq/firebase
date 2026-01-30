@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { MarketValuationData } from '../lib/types';
+import type { MarketValuationData } from '../lib/types';
 
 export const MarketValuation = () => {
   const [data, setData] = useState<MarketValuationData | null>(null);

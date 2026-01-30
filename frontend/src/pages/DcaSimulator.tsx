@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TickerCombobox } from '../components/TickerCombobox';
 import { api } from '../lib/api';
-import { DcaData } from '../lib/types';
+import type { DcaData } from '../lib/types';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 
 export const DcaSimulator = () => {
@@ -69,7 +69,7 @@ export const DcaSimulator = () => {
                 <Tooltip 
                   contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', color: 'hsl(var(--foreground))' }}
                   itemStyle={{ color: 'hsl(var(--foreground))' }}
-                  formatter={(val: number) => [`$${val.toLocaleString()}`, '']}
+                  formatter={(value: any) => [`$${(value || 0).toLocaleString()}`, '']}
                 />
                 <Legend />
                 <Area type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorValue)" name="Portfolio Value" />

@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, ChevronDown, Check } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 interface TickerComboboxProps {
   onSearch: (ticker: string) => void;
@@ -61,13 +60,15 @@ export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbo
             }}
             onFocus={() => setIsOpen(true)}
             placeholder={placeholder}
-            className="w-full bg-background border border-input rounded-lg py-2 pl-10 pr-10 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            disabled={isLoading}
+            className="w-full bg-background border border-input rounded-lg py-2 pl-10 pr-10 text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all disabled:opacity-50"
           />
           
           <button
             type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className="absolute right-2 p-1 hover:bg-muted rounded-md transition-colors"
+            onClick={() => !isLoading && setIsOpen(!isOpen)}
+            disabled={isLoading}
+            className="absolute right-2 p-1 hover:bg-muted rounded-md transition-colors disabled:opacity-50"
           >
             <ChevronDown size={16} className="text-muted-foreground" />
           </button>
@@ -75,7 +76,7 @@ export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbo
       </form>
 
       {/* Dropdown Menu */}
-      {isOpen && (
+      {isOpen && !isLoading && (
         <div className="absolute z-50 w-full mt-2 bg-popover border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
           <div className="py-1">
             <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/50">
