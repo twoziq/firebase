@@ -5,21 +5,24 @@ import { DcaSimulator } from './pages/DcaSimulator';
 import { RiskReturnMap } from './pages/RiskReturnMap';
 import { DeepQuantAnalysis } from './pages/DeepQuantAnalysis';
 import { ThemeProvider } from './components/ThemeProvider';
+import { LanguageProvider } from './components/LanguageProvider';
 
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="twoziq-theme">
-      <Router>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<MarketValuation />} />
-            <Route path="/dca" element={<DcaSimulator />} />
-            <Route path="/risk" element={<RiskReturnMap />} />
-            <Route path="/deep" element={<DeepQuantAnalysis />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Layout>
-      </Router>
+      <LanguageProvider>
+        <Router>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<MarketValuation />} />
+              <Route path="/dca" element={<DcaSimulator />} />
+              <Route path="/risk" element={<RiskReturnMap />} />
+              <Route path="/deep" element={<DeepQuantAnalysis />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Layout>
+        </Router>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

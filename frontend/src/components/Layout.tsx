@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { BarChart3, Wallet, Map as MapIcon, LineChart, Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ModeToggle } from './ModeToggle';
+import { LanguageToggle } from './LanguageToggle';
+import { useLanguage } from './LanguageProvider';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,12 +28,13 @@ const SidebarItem = ({ icon: Icon, label, to, active }: { icon: any, label: stri
 export const Layout = ({ children }: LayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const location = useLocation();
+  const { t } = useLanguage();
 
   const navItems = [
-    { icon: BarChart3, label: 'Market Valuation', path: '/' },
-    { icon: Wallet, label: 'DCA Simulator', path: '/dca' },
-    { icon: MapIcon, label: 'Risk/Return Map', path: '/risk' },
-    { icon: LineChart, label: 'Deep Quant', path: '/deep' },
+    { icon: BarChart3, label: t('market'), path: '/' },
+    { icon: Wallet, label: t('dca'), path: '/dca' },
+    { icon: MapIcon, label: t('risk'), path: '/risk' },
+    { icon: LineChart, label: t('deep'), path: '/deep' },
   ];
 
   return (
@@ -89,7 +92,8 @@ export const Layout = ({ children }: LayoutProps) => {
             </button>
           </div>
           
-          <div className="ml-auto flex items-center gap-4">
+          <div className="flex items-center gap-4">
+             <LanguageToggle />
              <ModeToggle />
           </div>
         </header>

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import type { MarketValuationData } from '../lib/types';
+import { useLanguage } from '../components/LanguageProvider';
 
 export const MarketValuation = () => {
   const [data, setData] = useState<MarketValuationData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const { t } = useLanguage();
 
   useEffect(() => {
     api.get<MarketValuationData>('/api/market/valuation')
@@ -13,17 +15,16 @@ export const MarketValuation = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="text-center p-10 text-muted-foreground">Loading Market Data...</div>;
-  if (!data) return <div className="text-center p-10 text-red-400">Failed to load data.</div>;
+  if (loading) return <div className="text-center p-10 text-muted-foreground">Loading...</div>;
+  if (!data) return <div className="text-center p-10 text-red-400">Failed to load.</div>;
 
-  // Format market cap for display (Trillions)
   const formatMktCap = (val: number) => `$${(val / 1e12).toFixed(2)}T`;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-foreground">Big Tech Valuation</h1>
-        <p className="text-muted-foreground">Weighted PER of Top 8 US Tech Giants</p>
+        <p className="text-muted-foreground">{t('market')} - US Tech Giants</p>
       </div>
 
       <div className="flex justify-center">

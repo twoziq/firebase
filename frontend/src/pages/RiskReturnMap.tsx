@@ -1,27 +1,50 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../lib/api';
 import type { RiskReturnData } from '../lib/types';
 import { ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, Tooltip, CartesianGrid, LabelList, ZAxis } from 'recharts';
+import { useLanguage } from '../components/LanguageProvider';
 
 export const RiskReturnMap = () => {
-  const [tickerInput, setTickerInput] = useState('AAPL, TSLA, NVDA, SPY, QQQ, AMZN, GOOGL, META, MSFT, AVGO');
+  const { t } = useLanguage();
+  const [tickerInput, setTickerInput] = useState('SPY QQQ DIA SCHD AAPL TSLA NVDA');
   const [data, setData] = useState<RiskReturnData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [domain, setDomain] = useState<{ x: [number, number], y: [number, number] } | null>(null);
 
   const handleAnalyze = () => {
     setLoading(true);
-    api.get<RiskReturnData[]>(`/api/risk-return?tickers=${tickerInput}`)
-      .then(res => setData(res.data))
+    api.get<RiskReturnData[]>(`/api/risk-return?tickers=${tickerInput.trim()}`)
+      .then(res => {
+        setData(res.data);
+        setDomain(null); // Reset zoom
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
+  useEffect(() => {
+    handleAnalyze();
+  }, []);
+
+  const handlePointClick = () => {
+    // Simple toggle auto-scale by resetting domain
+    if (domain) setDomain(null);
+    else {
+      const risks = data.map(d => d.risk);
+      const rets = data.map(d => d.return);
+      setDomain({
+        x: [Math.min(...risks) * 0.9, Math.max(...risks) * 1.1],
+        y: [Math.min(...rets) * 0.9, Math.max(...rets) * 1.1]
+      });
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Risk vs Return Map</h1>
-          <p className="text-muted-foreground text-sm">Visualize 1-year performance. Ideally, you want High Return (Up) and Low Risk (Left).</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('risk')}</h1>
+          <p className="text-muted-foreground text-sm">SPY, QQQ, DIA, SCHD included by default. Separated by space or comma.</p>
         </div>
         
         <div className="flex gap-2 w-full max-w-2xl">
@@ -29,35 +52,56 @@ export const RiskReturnMap = () => {
             type="text"
             value={tickerInput}
             onChange={(e) => setTickerInput(e.target.value)}
-            className="flex-1 bg-background border border-input rounded-lg px-4 py-2 text-foreground focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-            placeholder="AAPL, TSLA, NVDA..."
+            className="flex-1 bg-background border border-input rounded-lg px-4 py-2 text-foreground focus:ring-2 focus:ring-primary transition-all"
+            placeholder="SPY QQQ DIA SCHD..."
           />
           <button 
             onClick={handleAnalyze} 
             disabled={loading}
-            className="px-6 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="px-6 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
           >
-            {loading ? 'Analyzing...' : 'Map Tickers'}
+            {loading ? '...' : t('analyze')}
           </button>
         </div>
       </div>
 
       {data.length > 0 && (
-        <div className="h-[600px] bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
-          {/* Quadrant Backgrounds (CSS only for simplicity) */}
+        <div 
+          className="h-[600px] bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden cursor-pointer"
+          onClick={handlePointClick}
+          title="Click to toggle Auto-Scale"
+        >
           <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 opacity-5 pointer-events-none">
-             <div className="bg-red-500"></div> {/* High Risk, High Return */}
-             <div className="bg-green-500"></div> {/* Low Risk, High Return (Ideal) */}
-             <div className="bg-orange-500"></div> {/* High Risk, Low Return (Worst) */}
-             <div className="bg-yellow-500"></div> {/* Low Risk, Low Return */}
+             <div className="bg-red-500"></div>
+             <div className="bg-green-500"></div>
+             <div className="bg-orange-500"></div>
+             <div className="bg-yellow-500"></div>
           </div>
 
           <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis type="number" dataKey="risk" name="Risk (Vol)" unit="%" stroke="#9ca3af" label={{ value: 'Annualized Volatility (Risk)', position: 'insideBottom', offset: -10, fill: '#6b7280' }} />
-              <YAxis type="number" dataKey="return" name="Return" unit="%" stroke="#9ca3af" label={{ value: 'Annualized Return', angle: -90, position: 'insideLeft', fill: '#6b7280' }} />
-              <ZAxis range={[100, 100]} /> {/* Constant size dots */}
+            <ScatterChart margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+              <XAxis 
+                type="number" 
+                dataKey="risk" 
+                name="Risk" 
+                unit="%" 
+                stroke="#9ca3af" 
+                fontSize={12}
+                domain={domain ? domain.x : ['auto', 'auto']}
+                label={{ value: 'Annualized Volatility (Risk)', position: 'insideBottom', offset: -10, fill: '#6b7280', fontSize: 12 }} 
+              />
+              <YAxis 
+                type="number" 
+                dataKey="return" 
+                name="Return" 
+                unit="%" 
+                stroke="#9ca3af" 
+                fontSize={12}
+                domain={domain ? domain.y : ['auto', 'auto']}
+                label={{ value: 'Annualized Return', angle: -90, position: 'insideLeft', fill: '#6b7280', fontSize: 12 }} 
+              />
+              <ZAxis range={[100, 100]} />
               <Tooltip 
                 cursor={{ strokeDasharray: '3 3' }} 
                 content={({ active, payload }) => {
@@ -68,7 +112,6 @@ export const RiskReturnMap = () => {
                         <p className="font-bold text-foreground">{d.ticker}</p>
                         <p className="text-sm text-green-500">Return: {d.return.toFixed(1)}%</p>
                         <p className="text-sm text-red-400">Risk: {d.risk.toFixed(1)}%</p>
-                        <p className="text-xs text-muted-foreground mt-1">Ratio: {(d.return/d.risk).toFixed(2)}</p>
                       </div>
                     );
                   }
