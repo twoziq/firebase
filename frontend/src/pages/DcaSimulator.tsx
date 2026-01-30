@@ -20,12 +20,10 @@ export const DcaSimulator = () => {
     setLoading(true);
     if (selectedTicker !== ticker) setTicker(selectedTicker);
     
-    const encodedTicker = encodeURIComponent(selectedTicker);
-    console.log(`[DCA] Fetching for ${selectedTicker} (${encodedTicker})`);
-    
-    api.get<DcaData>(`/api/dca`, {
+    console.log(`[DCA] Fetching for ${selectedTicker} from ${startDate} to ${endDate}`);
+    api.get(`/api/dca`, {
       params: { 
-        ticker: selectedTicker, // Using ticker as query param since main.py defines it that way for /api/dca
+        ticker: selectedTicker,
         start_date: startDate, 
         end_date: endDate, 
         amount: Number(amount), 
@@ -33,11 +31,13 @@ export const DcaSimulator = () => {
       }
     })
       .then(res => {
-        console.log('[DCA] Success');
+        console.log('[DCA] Success:', res.data.ticker);
         setData(res.data);
       })
       .catch(err => {
-        console.error('[DCA] Error:', err.response?.data || err.message);
+        const errorDetail = err.response?.data?.detail || err.message;
+        console.error(`[DCA] Error: ${JSON.stringify(errorDetail)}`);
+        alert(`DCA Analysis failed: ${JSON.stringify(errorDetail)}`);
       })
       .finally(() => setLoading(false));
   }, [ticker, startDate, endDate, amount, frequency]);
