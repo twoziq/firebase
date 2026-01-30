@@ -1,0 +1,12 @@
+INFO:     Started server process [120865]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8081 (Press CTRL+C to quit)
+Traceback (most recent call last):
+  File "/home/user/twoziq/main.py", line 187, in get_deep_analysis
+    recent_actual = (price_vals[-analysis_period:] / price_vals[-analysis_period][0] * 100).tolist()
+                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: invalid index to scalar variable.
+Attempt 1 (download): Fetching AAPL from 2010-01-01 to 2026-01-30
+Error in get_deep_analysis: invalid index to scalar variable.
+INFO:     127.0.0.1:59060 - "GET /api/deep-analysis/AAPL?analysis_period=252 HTTP/1.1" 500 Internal Server Error
