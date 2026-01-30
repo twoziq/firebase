@@ -38,6 +38,13 @@ export const MarketValuation = () => {
     return "";
   };
 
+  // Helper for formatting large numbers
+  const formatCurrency = (val: number) => {
+    if (val >= 1e12) return `$${(val / 1e12).toFixed(2)}T`;
+    if (val >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
+    return `$${(val / 1e6).toFixed(0)}M`;
+  };
+
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="text-center space-y-2">
@@ -85,12 +92,32 @@ export const MarketValuation = () => {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {data.details.map((item) => (
-          <div key={item.ticker} className="bg-card border border-border p-5 rounded-2xl shadow-sm hover:border-primary/50 transition-colors">
-            <p className="font-black text-xl mb-1">{item.ticker}</p>
-            <p className="text-sm text-muted-foreground">PER: <span className="text-foreground font-mono font-bold ml-1">{item.pe.toFixed(1)}</span></p>
-          </div>
-        ))}
+        {data.details.map((item) => {
+          const earnings = item.market_cap / item.pe;
+          return (
+            <div key={item.ticker} className="group relative bg-card border border-border p-5 rounded-2xl shadow-sm hover:border-primary/50 transition-all duration-300 overflow-hidden cursor-default">
+              <div className="relative z-10 transition-transform duration-300 group-hover:-translate-y-1">
+                <div className="flex justify-between items-start mb-1">
+                  <p className="font-black text-xl">{item.ticker}</p>
+                  <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">PER</span>
+                </div>
+                <p className="text-2xl text-foreground font-bold">{item.pe.toFixed(1)}</p>
+              </div>
+              
+              {/* Hover Details */}
+              <div className="absolute inset-x-0 bottom-0 p-5 bg-muted/50 backdrop-blur-sm transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 flex flex-col gap-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Mkt Cap:</span>
+                  <span className="font-bold text-foreground">{formatCurrency(item.market_cap)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Earnings:</span>
+                  <span className="font-bold text-foreground">{formatCurrency(earnings)}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
