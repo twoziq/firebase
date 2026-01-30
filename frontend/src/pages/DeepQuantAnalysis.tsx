@@ -67,6 +67,7 @@ export const DeepQuantAnalysis = () => {
 
       {data && (
         <>
+          {/* Section 1: Distribution */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">{t('prob_dist')}</h2></div>
              <div className="h-[350px] bg-card border border-border rounded-xl p-4">
@@ -91,6 +92,7 @@ export const DeepQuantAnalysis = () => {
              </div>
           </section>
 
+          {/* Section 2: Path Comparison */}
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. Historical Typical Path vs Recent</h2></div>
              <div className="h-[400px] bg-card border border-border rounded-xl p-4">
@@ -101,9 +103,7 @@ export const DeepQuantAnalysis = () => {
                     <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} tickFormatter={(v) => `${v.toFixed(0)}`} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
                     <Legend />
-                    {/* Reference at 100 (Start) */}
                     <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
-                    
                     <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={3} dot={false} className="text-foreground" name="Recent 252D (Actual)" />
                     <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Historical Mean Path" />
                   </ComposedChart>
@@ -111,8 +111,31 @@ export const DeepQuantAnalysis = () => {
              </div>
           </section>
 
+          {/* Section 3: Z-Score Flow (Restored) */}
           <section className="space-y-4">
-             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-green-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">4. Log-Linear Trend Channel (Full History)</h2></div>
+             <div className="flex items-center gap-2">
+                <div className="w-1 h-8 bg-yellow-500 rounded-full"/>
+                <h2 className="text-xl font-bold text-foreground">3. {t('z_flow')}</h2>
+             </div>
+             <div className="h-[300px] bg-card border border-border rounded-xl p-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={zHistoryData}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => v.slice(5)} />
+                    <YAxis domain={[-3, 3]} stroke="#9ca3af" fontSize={10} />
+                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} />
+                    <ReferenceLine y={2} stroke="#ef4444" strokeDasharray="3 3" />
+                    <ReferenceLine y={-2} stroke="#3b82f6" strokeDasharray="3 3" />
+                    <ReferenceLine y={0} stroke="#22c55e" />
+                    <Line type="step" dataKey="z" stroke="#f59e0b" strokeWidth={2} dot={false} name="Z-Score" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+             </div>
+          </section>
+
+          {/* Section 4: Trend Channel */}
+          <section className="space-y-4">
+             <div className="flex items-center gap-2"><div className="w-1 h-8 bg-green-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">4. Log-Linear Trend Channel</h2></div>
              <div className="h-[500px] bg-card border border-border rounded-xl p-4">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={trendData}>
@@ -121,8 +144,10 @@ export const DeepQuantAnalysis = () => {
                     <YAxis domain={['auto', 'auto']} scale="log" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => `$${v.toFixed(0)}`} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))'}} />
                     <Legend />
+                    {/* Improved Area filling: only fill between upper and lower */}
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.1} />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
+                    
                     <Line type="monotone" dataKey="price" stroke="currentColor" strokeWidth={1} dot={false} className="text-foreground" name="Price" />
                     <Line type="monotone" dataKey="middle" stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} dot={false} name="Trend" />
                     <Line type="monotone" dataKey="upper" stroke="#ef4444" strokeWidth={1} dot={false} />
