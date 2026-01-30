@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { TickerCombobox } from '../components/TickerCombobox';
 import { api } from '../lib/api';
 import type { DeepAnalysisData } from '../lib/types';
-import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Area, BarChart, Bar, ReferenceLine, Cell } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, Area, ReferenceLine } from 'recharts';
 import { useLanguage } from '../components/LanguageProvider';
 
 export const DeepQuantAnalysis = () => {
@@ -34,24 +34,12 @@ export const DeepQuantAnalysis = () => {
   // Chart 1: Simulation (Past + Future)
   const simulationChartData: any[] = [];
   if (data?.simulation) {
-     // Past Data (Negative Days)
-     if (data.simulation.actual_past) {
-        const len = data.simulation.actual_past.length;
-        data.simulation.actual_past.forEach((val, i) => {
-           simulationChartData.push({ day: i - len + 1, actual: val }); // End at day 0
-        });
-     }
      // Future Data (Positive Days)
      if (data.simulation.p50) {
         data.simulation.p50.forEach((val, i) => {
-           // Skip index 0 (start point) to avoid duplicate if we want, or just overwrite. 
-           // Usually sim starts at 0 (100). 
            const obj: any = { day: i, p50: val, upper: data.simulation.upper?.[i], lower: data.simulation.lower?.[i] };
            data.simulation.samples?.forEach((path, idx) => { obj[`s${idx}`] = path[i]; });
-           // If day is 0, merge with existing actual entry if exists
-           const existing = simulationChartData.find(d => d.day === i);
-           if (existing) { Object.assign(existing, obj); } 
-           else { simulationChartData.push(obj); }
+           simulationChartData.push(obj);
         });
      }
   }
@@ -62,12 +50,6 @@ export const DeepQuantAnalysis = () => {
     upper: data.trend.upper[i], 
     middle: data.trend.middle[i], 
     lower: data.trend.lower[i]
-  })) || [];
-
-  const histData = data?.quant?.bins?.map((bin, i) => ({
-    bin: bin.toFixed(0) + '%', 
-    val: bin, 
-    count: data.quant.counts[i]
   })) || [];
 
   const zHistoryData = data?.quant?.z_history?.map((z, i) => ({

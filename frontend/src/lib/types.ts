@@ -52,5 +52,7 @@ export interface DeepAnalysisData {
     lower: number[];
     samples: number[][];
     actual_past: number[];
+    dca_perf?: number[];
+    savings_perf?: number[];
   };
 }
