@@ -171,19 +171,18 @@ export const DeepQuantAnalysis = () => {
                                         </Bar>
                                         <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
                                         
-                                        {/* TODAY Arrow - Custom Marker */}
-                                        <ReferenceLine 
-                                          x={data.current_1y_return?.toFixed(0) + '%'} 
-                                          stroke="#f59e0b" 
-                                          strokeWidth={0}
-                                          label={({viewBox}) => {
-                                            return (
-                                              <text x={viewBox.x} y={viewBox.y} dy={-5} fill="#f59e0b" fontSize={14} textAnchor="middle" fontWeight="bold">▼</text>
-                                            );
-                                          }} 
-                                        />
-                                      </BarChart>
-                                    </ResponsiveContainer>
+                                                            {/* TODAY Arrow - Custom Marker */}
+                                                            <ReferenceLine 
+                                                              x={data.current_1y_return?.toFixed(0) + '%'} 
+                                                              stroke="#ef4444" 
+                                                              strokeWidth={0}
+                                                              label={({viewBox}) => {
+                                                                return (
+                                                                  <text x={viewBox.x} y={viewBox.y} dy={-5} fill="#ef4444" fontSize={18} textAnchor="middle" fontWeight="bold">▼</text>
+                                                                );
+                                                              }} 
+                                                            />
+                                                          </BarChart>                                    </ResponsiveContainer>
                                  </div>
                               </section>          <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-yellow-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">3. {t('z_flow')}</h2></div>
