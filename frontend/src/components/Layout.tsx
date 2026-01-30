@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { BarChart3, Wallet, Map as MapIcon, LineChart, Menu, X } from 'lucide-react';
+import { BarChart3, Wallet, Map as MapIcon, LineChart, Menu, X, FileText } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { ModeToggle } from './ModeToggle';
 import { LanguageToggle } from './LanguageToggle';
 import { useLanguage } from './LanguageProvider';
+import { copyLogsToClipboard } from '../lib/logger';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -92,7 +93,14 @@ export const Layout = ({ children }: LayoutProps) => {
             </button>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
+             <button 
+               onClick={copyLogsToClipboard}
+               className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+               title="Copy Debug Logs"
+             >
+               <FileText size={18} />
+             </button>
              <LanguageToggle />
              <ModeToggle />
           </div>
