@@ -13,24 +13,49 @@ export const DeepQuantAnalysis = () => {
   const [ticker, setTicker] = useState('^IXIC');
   const [startDate, setStartDate] = useState('2010-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [analysisPeriod, setAnalysisPeriod] = useState(252);
-  const [forecastDays, setForecastDays] = useState(252);
+  const [periodDays, setPeriodDays] = useState(252);
 
-  const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number, fDays: number) => {
+  const fetchAnalysis = useCallback((tck: string, sDate: string, eDate: string, period: number) => {
     setLoading(true);
+    // Pass same period for both lookback and forecast
     api.get<DeepAnalysisData>(`/api/deep-analysis/${encodeURIComponent(tck)}`, {
-      params: { start_date: sDate, end_date: eDate, analysis_period: period, forecast_days: fDays }
+      params: { start_date: sDate, end_date: eDate, analysis_period: period, forecast_days: period }
     })
       .then(res => setData(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod, forecastDays); }, []);
+  useEffect(() => { fetchAnalysis(ticker, startDate, endDate, periodDays); }, []);
 
-  const handleAnalyzeClick = () => { fetchAnalysis(ticker, startDate, endDate, analysisPeriod, forecastDays); };
+  const handleAnalyzeClick = () => { fetchAnalysis(ticker, startDate, endDate, periodDays); };
 
   // --- Data Mapping ---
+  // Chart 1: Simulation (Past + Future)
+  const simulationChartData = [];
+  if (data?.simulation) {
+     // Past Data (Negative Days)
+     if (data.simulation.actual_past) {
+        const len = data.simulation.actual_past.length;
+        data.simulation.actual_past.forEach((val, i) => {
+           simulationChartData.push({ day: i - len + 1, actual: val }); // End at day 0
+        });
+     }
+     // Future Data (Positive Days)
+     if (data.simulation.p50) {
+        data.simulation.p50.forEach((val, i) => {
+           // Skip index 0 (start point) to avoid duplicate if we want, or just overwrite. 
+           // Usually sim starts at 0 (100). 
+           const obj: any = { day: i, p50: val, upper: data.simulation.upper?.[i], lower: data.simulation.lower?.[i] };
+           data.simulation.samples?.forEach((path, idx) => { obj[`s${idx}`] = path[i]; });
+           // If day is 0, merge with existing actual entry if exists
+           const existing = simulationChartData.find(d => d.day === i);
+           if (existing) { Object.assign(existing, obj); } 
+           else { simulationChartData.push(obj); }
+        });
+     }
+  }
+  
   const trendData = data?.trend?.dates?.map((date, i) => ({
     date, 
     price: data.trend.prices[i], 
@@ -45,17 +70,6 @@ export const DeepQuantAnalysis = () => {
     count: data.quant.counts[i]
   })) || [];
 
-  const pathData = data?.simulation?.p50?.map((val, i) => {
-    const obj: any = { 
-      day: i, 
-      p50: val, 
-      upper: data.simulation.upper?.[i], 
-      lower: data.simulation.lower?.[i], 
-    };
-    data.simulation.samples?.forEach((path, idx) => { obj[`s${idx}`] = path[i]; });
-    return obj;
-  }) || [];
-
   const zHistoryData = data?.quant?.z_history?.map((z, i) => ({
     date: data.quant.z_dates[i], 
     z: z
@@ -65,21 +79,18 @@ export const DeepQuantAnalysis = () => {
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[50] py-4 border-b border-border">
         <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
-        <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, analysisPeriod, forecastDays); }} isLoading={loading} initialValue={ticker} />
+        <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, periodDays); }} isLoading={loading} initialValue={ticker} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Lookback (Days)</label>
-          <input type="number" value={analysisPeriod} onChange={e => setAnalysisPeriod(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
-        </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Forecast (Days)</label>
-          <input type="number" value={forecastDays} onChange={e => setForecastDays(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Period (Days)</label>
+          <input type="number" value={periodDays} onChange={e => setPeriodDays(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="flex items-end">
           <button onClick={handleAnalyzeClick} disabled={loading} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90">
@@ -91,12 +102,13 @@ export const DeepQuantAnalysis = () => {
       {data && !loading && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-green-500">
-             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Rolling Mean Return ({analysisPeriod}D)</p>
+             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Rolling Mean Return ({periodDays}D)</p>
              <p className="text-2xl font-black text-green-500">{data.avg_1y_return?.toFixed(1)}%</p>
            </div>
-           <div className="bg-card border border-border p-4 rounded-xl shadow-sm">
-             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Data Available Since</p>
-             <p className="text-xl font-bold text-foreground">{data.first_date}</p>
+           <div className="bg-card border border-border p-4 rounded-xl shadow-sm relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-2 opacity-10"><BarChart3 size={100}/></div>
+             <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Data Since</p>
+             <p className="text-lg font-bold text-foreground">{data.first_date}</p>
            </div>
            <div className="bg-card border border-border p-4 rounded-xl shadow-sm border-l-4 border-l-primary">
              <p className="text-xs text-muted-foreground uppercase font-bold mb-1">Current Z-Score</p>
@@ -113,31 +125,25 @@ export const DeepQuantAnalysis = () => {
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">1. Future Simulation (Monte Carlo)</h2></div>
              <div className="h-[450px] bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={pathData}>
+                  <ComposedChart data={simulationChartData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
-                    <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} label={{ value: 'Future Days', position: 'insideBottomRight', offset: -5 }} />
-                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} />
-                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} labelFormatter={(v) => `Future Day: +${v}`} />
+                    <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} label={{ value: 'Days (0=Today)', position: 'insideBottomRight', offset: -5 }} type="number" domain={['auto', 'auto']} />
+                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} label={{ value: 'Normalized Price (100=Start)', angle: -90, position: 'insideLeft' }} />
+                    <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} labelFormatter={(v) => `Day: ${v}`} itemSorter={(item) => item.name === 'Current Trajectory' ? -1 : 1} />
                     <Legend />
-                    <ReferenceLine y={data.trend?.prices ? data.trend.prices[data.trend.prices.length-1] : 0} stroke="#6b7280" strokeDasharray="3 3" label="Current Price" />
+                    <ReferenceLine x={0} stroke="#6b7280" strokeDasharray="3 3" />
+                    
+                    {/* Future Cone */}
                     <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.05} />
                     <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
                     
-                    {/* Random Samples (30) - HIDDEN FROM LEGEND */}
+                    {/* Random Samples - HIDDEN */}
                     {Array.from({length: 30}).map((_, i) => (
-                      <Line 
-                        key={i} 
-                        type="monotone" 
-                        dataKey={`s${i}`} 
-                        stroke="#6b7280" 
-                        strokeWidth={1} 
-                        strokeOpacity={0.1} 
-                        dot={false} 
-                        legendType="none"
-                      />
+                      <Line key={i} type="monotone" dataKey={`s${i}`} stroke="#6b7280" strokeWidth={1} strokeOpacity={0.1} dot={false} legendType="none" />
                     ))}
                     
-                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Median Scenario (P50)" />
+                    <Line type="monotone" dataKey="actual" stroke="#000000" strokeWidth={3} dot={false} name="Current Trajectory" />
+                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} strokeDasharray="5 5" dot={false} name={`Projected Mean (+${data.avg_1y_return?.toFixed(1)}%)`} />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>
@@ -161,12 +167,12 @@ export const DeepQuantAnalysis = () => {
                     </Bar>
                     <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
                     
-                    {/* TODAY Arrow/Marker - Fixed Alignment */}
+                    {/* TODAY Arrow - Bottom */}
                     <ReferenceLine 
                       x={data.current_1y_return?.toFixed(0) + '%'} 
                       stroke="#f59e0b" 
                       strokeWidth={2} 
-                      label={{position: 'top', value: 'Today ▽', fill: '#f59e0b', fontWeight: 'bold'}} 
+                      label={{position: 'insideBottom', value: '▲ Today', fill: '#f59e0b', fontWeight: 'bold', offset: 10}} 
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -179,7 +185,7 @@ export const DeepQuantAnalysis = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={zHistoryData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
-                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={100} tickFormatter={(v) => v?.slice(2, 7)} />
+                    <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} minTickGap={100} tickFormatter={(v) => v?.slice(0, 4)} />
                     <YAxis domain={[-4, 4]} stroke="#9ca3af" fontSize={10} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
                     <ReferenceLine y={2} stroke="#ef4444" strokeDasharray="3 3" />
@@ -190,6 +196,7 @@ export const DeepQuantAnalysis = () => {
                 </ResponsiveContainer>
              </div>
           </section>
+
 
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-green-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">4. Log-Linear Trend Channel</h2></div>
