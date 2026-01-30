@@ -30,6 +30,7 @@ export interface RiskReturnData {
 export interface DeepAnalysisData {
   ticker: string;
   current_price: number;
+  current_return: number;
   trend: {
     dates: string[];
     prices: number[];
@@ -38,18 +39,17 @@ export interface DeepAnalysisData {
     lower: number[];
   };
   quant: {
+    mean: number;
+    std: number;
     current_z: number;
     z_history: number[];
     z_dates: string[];
-    distribution: {
-      bins: number[];
-      counts: number[];
-    };
+    bins: number[];
+    counts: number[];
   };
   simulation: {
-    days: number;
-    p95: number[];
     p50: number[];
-    p05: number[];
+    samples: number[][];
+    actual_past: number[];
   };
 }

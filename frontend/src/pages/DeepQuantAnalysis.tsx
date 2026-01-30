@@ -45,11 +45,13 @@ export const DeepQuantAnalysis = () => {
 
   const simData = data?.simulation.p50.map((val, i) => {
     const obj: any = { day: i, p50: val };
-    data.simulation.samples.forEach((path, idx) => {
-      obj[`s${idx}`] = path[i];
-    });
+    if (data && data.simulation.samples) {
+      data.simulation.samples.forEach((path, idx) => {
+        obj[`s${idx}`] = path[i];
+      });
+    }
     // Add historical past moving as a comparison (shifted to end at NOW)
-    if (data.simulation.actual_past && data.simulation.actual_past[i] !== undefined) {
+    if (data && data.simulation.actual_past && data.simulation.actual_past[i] !== undefined) {
        obj['actual'] = data.simulation.actual_past[i];
     }
     return obj;
@@ -107,7 +109,7 @@ export const DeepQuantAnalysis = () => {
                         contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} 
                       />
                       <Bar dataKey="count" name="Frequency">
-                        {histData.map((entry, index) => {
+                        {histData.map((entry: any, index: number) => {
                           const isStdOut = Math.abs(entry.val / data.quant.std) > 2;
                           let color = "hsl(var(--primary))";
                           if (isStdOut) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
