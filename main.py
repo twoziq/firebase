@@ -6,12 +6,11 @@ import numpy as np
 from datetime import datetime, timedelta
 import pytz
 from functools import lru_cache
-import time
+import random
 from typing import List, Dict, Optional, Any
 
 app = FastAPI(title="Twoziq Finance API")
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,11 +24,33 @@ TOP_8 = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO']
 
 @lru_cache(maxsize=128)
 def get_data(ticker: str, start: str = None, end: str = None):
+    # 1차 시도: yf.download
     try:
+        print(f"Attempt 1 (download): Fetching {ticker} from {start} to {end}")
         df = yf.download(ticker, start=start, end=end, progress=False)
-        if df.empty: return None
-        return df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
-    except: return None
+        
+        if not df.empty:
+            return df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
+    except Exception as e:
+        print(f"Attempt 1 failed for {ticker}: {e}")
+
+    # 2차 시도: yf.Ticker().history (Fallback)
+    try:
+        print(f"Attempt 2 (history): Fetching {ticker} via Ticker.history")
+        dat = yf.Ticker(ticker)
+        # start/end가 있으면 사용, 없으면 period="max"
+        if start and end:
+            df = dat.history(start=start, end=end)
+        else:
+            df = dat.history(period="max")
+        
+        if not df.empty:
+            return df['Close']
+    except Exception as e:
+        print(f"Attempt 2 failed for {ticker}: {e}")
+
+    print(f"All attempts failed for {ticker}")
+    return None
 
 @app.get("/api/market/valuation")
 def get_market_valuation():
@@ -50,8 +71,7 @@ def get_market_valuation():
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
     data_dict = {}
-    mkt_caps = {}
-    pes = {}
+    mkt_caps, pes = {}, {}
     for t in TOP_8:
         try:
             info = yf.Ticker(t).info
@@ -70,6 +90,34 @@ def get_per_history(period: str = "2y"):
     avg_pe = sum(pes[t] * mkt_caps[t] for t in pes) / total_mkt_cap
     return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
 
+@app.get("/api/dca")
+def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
+    series = get_data(ticker, start=start_date, end=end_date)
+    if series is None or series.empty:
+        raise HTTPException(status_code=404, detail=f"Price data for {ticker} not found.")
+    
+    total_invested, total_shares = 0, 0
+    dates, invested_curve, valuation_curve = [], [], []
+    freq_map = {"daily": "D", "weekly": "W-MON", "monthly": "MS"}
+    buy_dates = set(pd.date_range(start=start_date, end=end_date, freq=freq_map.get(frequency, "MS")).strftime('%Y-%m-%d'))
+    
+    last_buy_month = ""
+    for date, price in series.items():
+        curr = date.strftime('%Y-%m-%d')
+        month = date.strftime('%Y-%m')
+        should_buy = (frequency == "monthly" and month != last_buy_month) or (frequency != "monthly" and curr in buy_dates)
+        
+        if should_buy:
+            total_shares += amount / price
+            total_invested += amount
+            last_buy_month = month
+            
+        dates.append(curr)
+        invested_curve.append(float(total_invested))
+        valuation_curve.append(float(total_shares * price))
+        
+    return {"ticker": ticker, "total_invested": total_invested, "final_value": valuation_curve[-1], "return_pct": ((valuation_curve[-1]-total_invested)/total_invested*100) if total_invested > 0 else 0, "dates": dates, "invested_curve": invested_curve, "valuation_curve": valuation_curve}
+
 @app.get("/api/risk-return")
 def get_risk_return(tickers: str):
     ticker_list = [t.strip().upper() for t in tickers.replace(' ', ',').split(',') if t.strip()]
@@ -87,59 +135,53 @@ def get_risk_return(tickers: str):
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252):
     if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
-    fetch_start = (datetime.strptime(start_date, '%Y-%m-%d') - timedelta(days=analysis_period + 100)).strftime('%Y-%m-%d')
-    
-    df = yf.download(ticker, start=fetch_start, end=end_date, progress=False)
-    if df.empty: raise HTTPException(status_code=404, detail="No data found")
-    
+    df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+    if df.empty: raise HTTPException(status_code=404)
     prices = df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
     prices = prices.ffill().dropna()
-    
-    if len(prices) < analysis_period: raise HTTPException(status_code=400, detail="Data too short")
-
-    first_date = prices.index[0].strftime('%Y-%m-%d')
     price_vals = prices.values
-    
-    # Vectorized Rolling Returns
+    if len(price_vals) < analysis_period:
+        df = yf.download(ticker, period="max", progress=False)
+        prices = df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
+        price_vals = prices.ffill().dropna().values
+        if len(price_vals) < analysis_period: raise HTTPException(status_code=400)
+
     rolling_rets = (price_vals[analysis_period:] / price_vals[:-analysis_period]) - 1
     rolling_rets_pct = rolling_rets * 100
-    
-    # Average Path Calculation (Optimized)
     num_windows = len(price_vals) - analysis_period
     step = max(1, num_windows // 500)
-    paths = [price_vals[i : i + analysis_period] / price_vals[i] * 100 for i in range(0, num_windows, step)]
     
-    avg_path = np.mean(paths, axis=0).tolist()
-    recent_segment = price_vals[-analysis_period:]
-    recent_actual_path = (recent_segment / recent_segment[0] * 100).tolist()
+    all_paths = [price_vals[i : i + analysis_period] / price_vals[i] * 100 for i in range(0, num_windows, step)]
+    avg_path = np.mean(all_paths, axis=0).tolist()
+    std_path = np.std(all_paths, axis=0)
     
-    # Trend
+    # 30 random samples for background
+    sample_indices = random.sample(range(len(all_paths)), min(30, len(all_paths)))
+    samples = [all_paths[i].tolist() for i in sample_indices]
+    
+    recent_actual = (price_vals[-analysis_period:] / price_vals[-analysis_period][0] * 100).tolist()
+    
     x = np.arange(len(price_vals))
-    log_p = np.log(price_vals)
-    slope, intercept = np.polyfit(x, log_p, 1)
+    slope, intercept = np.polyfit(x, np.log(price_vals), 1)
     line = np.exp(slope * x + intercept)
-    std_resid = np.std(log_p - np.log(line))
-    
-    hist_counts, bin_edges = np.histogram(rolling_rets_pct, bins=100)
+    std_resid = np.std(np.log(price_vals) - np.log(line))
     
     return {
-        "ticker": ticker, "first_date": first_date, "invested_days": len(prices),
-        "avg_1y_return": float(np.mean(rolling_rets_pct)),
+        "ticker": ticker, "first_date": prices.index[0].strftime('%Y-%m-%d'), "avg_1y_return": float(np.mean(rolling_rets_pct)),
+        "current_1y_return": float(rolling_rets_pct[-1]),
         "trend": {
-            "dates": prices.index.strftime('%Y-%m-%d').tolist(),
-            "prices": price_vals.tolist(),
-            "middle": line.tolist(),
-            "upper": (line * np.exp(2 * std_resid)).tolist(),
-            "lower": (line * np.exp(-2 * std_resid)).tolist()
+            "dates": prices.index.strftime('%Y-%m-%d').tolist(), "prices": price_vals.tolist(),
+            "middle": line.tolist(), "upper": (line * np.exp(2*std_resid)).tolist(), "lower": (line * np.exp(-2*std_resid)).tolist()
         },
         "quant": {
-            "mean": float(np.mean(rolling_rets_pct)),
-            "std": float(np.std(rolling_rets_pct)),
-            "current_z": float((rolling_rets_pct[-1] - np.mean(rolling_rets_pct)) / np.std(rolling_rets_pct)) if len(rolling_rets_pct)>0 else 0,
+            "mean": float(np.mean(rolling_rets_pct)), "std": float(np.std(rolling_rets_pct)), "current_z": float((rolling_rets_pct[-1] - np.mean(rolling_rets_pct)) / np.std(rolling_rets_pct)) if len(rolling_rets_pct)>0 else 0,
             "z_history": ((prices.pct_change()-prices.pct_change().mean())/prices.pct_change().std()).fillna(0).tail(100).tolist(),
             "z_dates": prices.tail(100).index.strftime('%Y-%m-%d').tolist(),
-            "bins": bin_edges[:-1].tolist(),
-            "counts": hist_counts.tolist()
+            "bins": np.histogram(rolling_rets_pct, bins=100)[1][:-1].tolist(), "counts": np.histogram(rolling_rets_pct, bins=100)[0].tolist()
         },
-        "simulation": { "p50": avg_path, "actual_past": recent_actual_path }
+        "simulation": { "p50": avg_path, "upper": (np.array(avg_path) + 2*std_path).tolist(), "lower": (np.array(avg_path) - 2*std_path).tolist(), "actual_past": recent_actual, "samples": samples }
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)
