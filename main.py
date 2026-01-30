@@ -112,8 +112,11 @@ def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequenc
     buy_dates = set(pd.date_range(start=start_date, end=end_date, freq=freq_map.get(frequency, "MS")).strftime('%Y-%m-%d'))
     
     last_buy_month = ""
+    prices_list = []
+    
     for date, price in series.items():
         curr = date.strftime('%Y-%m-%d')
+        prices_list.append(float(price))
         month = date.strftime('%Y-%m')
         should_buy = (frequency == "monthly" and month != last_buy_month) or (frequency != "monthly" and curr in buy_dates)
         
@@ -126,7 +129,7 @@ def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequenc
         invested_curve.append(float(total_invested))
         valuation_curve.append(float(total_shares * price))
         
-    return {"ticker": ticker, "total_invested": total_invested, "final_value": valuation_curve[-1], "return_pct": ((valuation_curve[-1]-total_invested)/total_invested*100) if total_invested > 0 else 0, "dates": dates, "invested_curve": invested_curve, "valuation_curve": valuation_curve}
+    return {"ticker": ticker, "total_invested": total_invested, "final_value": valuation_curve[-1], "return_pct": ((valuation_curve[-1]-total_invested)/total_invested*100) if total_invested > 0 else 0, "dates": dates, "invested_curve": invested_curve, "valuation_curve": valuation_curve, "prices": prices_list}
 
 @app.get("/api/risk-return")
 def get_risk_return(tickers: str):

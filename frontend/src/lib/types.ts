@@ -15,6 +15,7 @@ export interface DcaData {
   dates: string[];
   invested_curve: number[];
   valuation_curve: number[];
+  prices: number[];
 }
 
 export interface RiskReturnData {

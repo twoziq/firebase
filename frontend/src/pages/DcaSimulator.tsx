@@ -45,7 +45,10 @@ export const DcaSimulator = () => {
   useEffect(() => { handleSearch('^IXIC'); }, []);
 
   const chartData = data?.dates?.map((date, i) => ({
-    date, invested: data.invested_curve[i], value: data.valuation_curve[i]
+    date, 
+    invested: data.invested_curve[i], 
+    value: data.valuation_curve[i],
+    price: data.prices?.[i]
   })) || [];
 
   return (
@@ -93,11 +96,13 @@ export const DcaSimulator = () => {
                 <defs><linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
                 <XAxis dataKey="date" stroke="#9ca3af" fontSize={10} tickFormatter={(val) => val?.slice(2)} minTickGap={50} />
-                <YAxis stroke="#9ca3af" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
-                <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} formatter={(value: any) => [`$${(value || 0).toLocaleString()}`, '']} />
+                <YAxis yAxisId="left" stroke="#9ca3af" fontSize={10} tickFormatter={(val) => `$${val/1000}k`} />
+                <YAxis yAxisId="right" orientation="right" stroke="#6b7280" fontSize={10} tickFormatter={(val) => `$${val}`} hide={false} />
+                <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} formatter={(value: any, name: string) => [name === 'Actual Price' ? `$${value}` : `$${(value || 0).toLocaleString()}`, name]} />
                 <Legend />
-                <Area type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorValue)" name="Portfolio Value" strokeWidth={2} />
-                <Area type="step" dataKey="invested" stroke="#9ca3af" strokeDasharray="5 5" fill="none" name="Invested Capital" />
+                <Area yAxisId="left" type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorValue)" name="Portfolio Value" strokeWidth={2} />
+                <Area yAxisId="left" type="step" dataKey="invested" stroke="#22c55e" strokeDasharray="5 5" fill="none" name="Invested Capital" strokeWidth={2} />
+                <Area yAxisId="right" type="monotone" dataKey="price" stroke="#6b7280" fill="none" strokeOpacity={0.3} name="Actual Price" strokeWidth={1} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
