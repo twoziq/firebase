@@ -27,14 +27,13 @@ export const RiskReturnMap = () => {
   }, []);
 
   const handlePointClick = () => {
-    // Simple toggle auto-scale by resetting domain
     if (domain) setDomain(null);
     else {
       const risks = data.map(d => d.risk);
       const rets = data.map(d => d.return);
       setDomain({
-        x: [Math.min(...risks) * 0.9, Math.max(...risks) * 1.1],
-        y: [Math.min(...rets) * 0.9, Math.max(...rets) * 1.1]
+        x: [Math.min(0, ...risks) * 1.1, Math.max(...risks) * 1.1],
+        y: [Math.min(0, ...rets) * 1.1, Math.max(...rets) * 1.1]
       });
     }
   };
@@ -88,7 +87,7 @@ export const RiskReturnMap = () => {
                 unit="%" 
                 stroke="#9ca3af" 
                 fontSize={12}
-                domain={domain ? domain.x : ['auto', 'auto']}
+                domain={domain ? domain.x : [0, 'auto']}
                 label={{ value: 'Annualized Volatility (Risk)', position: 'insideBottom', offset: -10, fill: '#6b7280', fontSize: 12 }} 
               />
               <YAxis 
@@ -98,7 +97,7 @@ export const RiskReturnMap = () => {
                 unit="%" 
                 stroke="#9ca3af" 
                 fontSize={12}
-                domain={domain ? domain.y : ['auto', 'auto']}
+                domain={domain ? domain.y : [0, 'auto']}
                 label={{ value: 'Annualized Return', angle: -90, position: 'insideLeft', fill: '#6b7280', fontSize: 12 }} 
               />
               <ZAxis range={[100, 100]} />

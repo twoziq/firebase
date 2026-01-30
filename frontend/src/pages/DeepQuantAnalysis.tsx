@@ -11,15 +11,20 @@ export const DeepQuantAnalysis = () => {
   const [loading, setLoading] = useState(false);
   const { t } = useLanguage();
 
-  const handleSearch = (ticker: string) => {
+  // Range States
+  const [ticker, setTicker] = useState('^IXIC');
+  const [startDate, setStartDate] = useState('2021-01-01');
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const handleSearch = (selectedTicker: string = ticker) => {
     setLoading(true);
-    api.get<DeepAnalysisData>(`/api/deep-analysis/${ticker}`)
+    if (selectedTicker !== ticker) setTicker(selectedTicker);
+    api.get<DeepAnalysisData>(`/api/deep-analysis/${selectedTicker}?start_date=${startDate}&end_date=${endDate}`)
       .then(res => setData(res.data))
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  // Default load
   useEffect(() => {
     handleSearch('^IXIC');
   }, []);
@@ -43,6 +48,10 @@ export const DeepQuantAnalysis = () => {
     data.simulation.samples.forEach((path, idx) => {
       obj[`s${idx}`] = path[i];
     });
+    // Add historical past moving as a comparison (shifted to end at NOW)
+    if (data.simulation.actual_past && data.simulation.actual_past[i] !== undefined) {
+       obj['actual'] = data.simulation.actual_past[i];
+    }
     return obj;
   }) || [];
 
@@ -56,9 +65,26 @@ export const DeepQuantAnalysis = () => {
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-30 py-4 border-b border-border">
         <div>
           <h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1>
-          <p className="text-muted-foreground">Comprehensive statistical breakdown for {data?.ticker || '^IXIC'}</p>
+          <p className="text-muted-foreground">Statistical breakdown for {ticker}</p>
         </div>
         <TickerCombobox onSearch={handleSearch} isLoading={loading} placeholder={t('ticker_placeholder')} />
+      </div>
+
+      {/* Date Filter */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm" />
+        </div>
+        <div className="flex items-end">
+          <button onClick={() => handleSearch()} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90 transition-opacity">
+            {t('analyze')}
+          </button>
+        </div>
       </div>
 
       {data && (
@@ -84,9 +110,9 @@ export const DeepQuantAnalysis = () => {
                         {histData.map((entry, index) => {
                           const isStdOut = Math.abs(entry.val / data.quant.std) > 2;
                           let color = "hsl(var(--primary))";
-                          if (isStdOut) color = entry.val > 0 ? "#ef4444" : "#3b82f6"; // Red for +Std, Blue for -Std
-                          else if (entry.val > 0) color = "#86efac"; // Light Green
-                          else color = "#93c5fd"; // Light Blue
+                          if (isStdOut) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
+                          else if (entry.val > 0) color = "#86efac";
+                          else color = "#93c5fd";
                           return <Cell key={`cell-${index}`} fill={color} />;
                         })}
                       </Bar>
@@ -96,15 +122,14 @@ export const DeepQuantAnalysis = () => {
                 </div>
                 <div className="flex flex-col justify-center space-y-4 p-6 bg-muted/20 rounded-xl border border-border/50">
                    <div className="flex justify-between items-end">
-                      <span className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Current Yield</span>
+                      <span className="text-sm text-muted-foreground uppercase tracking-wider font-semibold">Yield</span>
                       <span className={cn("text-3xl font-black", data.current_return >= 0 ? "text-green-500" : "text-red-500")}>
                         {data.current_return.toFixed(2)}%
                       </span>
                    </div>
                    <div className="h-px bg-border" />
                    <p className="text-sm text-muted-foreground leading-relaxed">
-                     Z-Score: <span className="font-bold text-foreground">{data.quant.current_z.toFixed(2)}σ</span>. 
-                     The distribution shows returns over the analysis period. Red/Blue bars indicate 2-sigma outliers.
+                     Z-Score: <span className="font-bold text-foreground">{data.quant.current_z.toFixed(2)}σ</span>.
                    </p>
                 </div>
              </div>
@@ -124,16 +149,16 @@ export const DeepQuantAnalysis = () => {
                     <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} tickFormatter={(v) => `$${v.toFixed(0)}`} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} />
                     
-                    {/* Sample Paths (Gray lines) */}
+                    {/* Gray Samples */}
                     {Array.from({length: 10}).map((_, i) => (
-                      <Line key={i} type="monotone" dataKey={`s${i}`} stroke="#6b7280" strokeWidth={1} strokeOpacity={0.2} dot={false} />
+                      <Line key={i} type="monotone" dataKey={`s${i}`} stroke="#6b7280" strokeWidth={1} strokeOpacity={0.1} dot={false} />
                     ))}
                     
-                    {/* Thick Recent Actual (Historical end point) */}
-                    <ReferenceLine x={0} stroke="#ffffff" strokeWidth={3} label={{value: 'NOW', fill: '#ffffff', fontSize: 10}} />
+                    {/* Actual Past Moving (Thick Solid) - White in Dark, Black in Light */}
+                    <Line type="monotone" dataKey="actual" stroke="currentColor" strokeWidth={3} dot={false} className="text-foreground" name="Actual Moving (Past 120D)" />
                     
-                    {/* Median Path (Green Solid) */}
-                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Median Flow" />
+                    {/* Median (Green Solid) */}
+                    <Line type="monotone" dataKey="p50" stroke="#22c55e" strokeWidth={3} dot={false} name="Median Path" />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>
@@ -175,11 +200,14 @@ export const DeepQuantAnalysis = () => {
                     <YAxis domain={['auto', 'auto']} scale="log" stroke="#9ca3af" fontSize={10} tickFormatter={(v) => `$${v.toFixed(0)}`} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))'}} />
                     <Legend />
-                    {/* Using CSS variables for stroke to handle dark/light mode transition */}
+                    {/* Fill between upper and lower only with light gray */}
+                    <Area type="monotone" dataKey="upper" stroke="none" fill="#6b7280" fillOpacity={0.1} />
+                    <Area type="monotone" dataKey="lower" stroke="none" fill="hsl(var(--background))" fillOpacity={1} />
+                    
                     <Line type="monotone" dataKey="price" stroke="currentColor" strokeWidth={2} dot={false} name="Price" className="text-foreground" />
                     <Line type="monotone" dataKey="middle" stroke="#22c55e" strokeDasharray="5 5" strokeWidth={2} dot={false} name="Trend Mean" />
-                    <Area type="monotone" dataKey="upper" stroke="#ef4444" fill="#ef4444" fillOpacity={0.05} strokeWidth={1} name="+2σ Band" />
-                    <Area type="monotone" dataKey="lower" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.05} strokeWidth={1} name="-2σ Band" />
+                    <Line type="monotone" dataKey="upper" stroke="#ef4444" strokeWidth={1} dot={false} name="+2σ Band" />
+                    <Line type="monotone" dataKey="lower" stroke="#3b82f6" strokeWidth={1} dot={false} name="-2σ Band" />
                   </ComposedChart>
                 </ResponsiveContainer>
              </div>

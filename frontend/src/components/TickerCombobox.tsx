@@ -77,8 +77,8 @@ export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbo
 
       {/* Dropdown Menu */}
       {isOpen && !isLoading && (
-        <div className="absolute z-50 w-full mt-2 bg-popover border border-border rounded-lg shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-          <div className="py-1">
+        <div className="absolute z-50 w-full mt-2 bg-popover border border-border rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="py-1 bg-popover">
             <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/50">
               Popular Indices
             </div>

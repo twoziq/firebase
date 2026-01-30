@@ -19,7 +19,9 @@ export const DcaSimulator = () => {
 
   const handleSearch = (selectedTicker: string = ticker) => {
     setLoading(true);
-    setTicker(selectedTicker);
+    // Update local ticker state when searching via combobox
+    if (selectedTicker !== ticker) setTicker(selectedTicker);
+
     api.get<DcaData>(`/api/dca?ticker=${selectedTicker}&start_date=${startDate}&end_date=${endDate}&amount=${amount}&frequency=${frequency}`)
       .then(res => setData(res.data))
       .catch(console.error)
