@@ -65,27 +65,69 @@ export const DeepQuantAnalysis = () => {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[20] py-4 border-b border-border">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6 relative py-4 border-b border-border">
         <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
         <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, periodDays); }} isLoading={loading} initialValue={ticker} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm items-start">
-        <div className="space-y-1">
-          <label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
-          {data?.first_date && <p className="text-[10px] text-muted-foreground mt-1">Listing Date: {data.first_date}</p>}
+      <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Analysis Range */}
+          <div className="lg:col-span-2 space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b border-border pb-2">
+              <span className="w-1.5 h-1.5 bg-purple-500 rounded-full"></span>
+              Analysis Range
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">{t('start_date')}</label>
+                <div className="relative">
+                  <input 
+                    type="date" 
+                    value={startDate} 
+                    onChange={e => setStartDate(e.target.value)} 
+                    className="w-full h-11 bg-background border border-input rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+                  />
+                  {data?.first_date && <p className="text-xs text-muted-foreground mt-1 absolute right-0 -bottom-5">Listing: {data.first_date}</p>}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">{t('end_date')}</label>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={e => setEndDate(e.target.value)} 
+                  className="w-full h-11 bg-background border border-input rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Parameters */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b border-border pb-2">
+              <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></span>
+              Parameters
+            </h3>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Rolling Period (Days)</label>
+              <input 
+                type="number" 
+                value={periodDays} 
+                onChange={e => setPeriodDays(Number(e.target.value))} 
+                className="w-full h-11 bg-background border border-input rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+              />
+            </div>
+          </div>
         </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
-        </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Period (Days)</label>
-          <input type="number" value={periodDays} onChange={e => setPeriodDays(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
-        </div>
-        <div className="space-y-1"></div>
-        <div className="flex items-end h-full pb-1">
-          <button onClick={handleAnalyzeClick} disabled={loading} className="w-full bg-primary text-primary-foreground py-1.5 rounded-lg font-bold hover:opacity-90">
-            {loading ? '...' : t('analyze')}
+
+        <div className="pt-2">
+          <button 
+            onClick={handleAnalyzeClick} 
+            disabled={loading} 
+            className="w-full h-12 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-bold text-lg hover:opacity-90 transition-all shadow-lg shadow-purple-500/20 active:scale-[0.98]"
+          >
+            {loading ? 'Crunching Numbers...' : t('analyze')}
           </button>
         </div>
       </div>

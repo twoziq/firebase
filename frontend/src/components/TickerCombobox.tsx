@@ -37,7 +37,7 @@ export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbo
   };
 
   return (
-    <div className="relative w-full max-w-md" ref={wrapperRef} style={{ zIndex: 9999 }}>
+    <div className="relative w-full max-w-md" ref={wrapperRef}>
       <form onSubmit={handleSubmit} className="relative">
         <div className="relative flex items-center">
           <Search className="absolute left-3 text-muted-foreground" size={18} />
@@ -60,7 +60,7 @@ export const TickerCombobox = ({ onSearch, isLoading, placeholder = "Enter symbo
 
       {isOpen && !isLoading && (
         <div 
-          className="absolute left-0 right-0 z-[10000] mt-2 border border-border rounded-lg shadow-2xl overflow-hidden"
+          className="absolute left-0 right-0 z-30 mt-2 border border-border rounded-lg shadow-2xl overflow-hidden"
           style={{ backgroundColor: 'hsl(var(--card))', opacity: 1 }}
         >
           <div className="py-1" style={{ backgroundColor: 'hsl(var(--card))' }}>

@@ -61,26 +61,80 @@ export const DcaSimulator = () => {
         <TickerCombobox onSearch={handleSearch} isLoading={loading} placeholder={t('ticker_placeholder')} initialValue={ticker} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+      <div className="bg-card border border-border p-6 rounded-2xl shadow-sm space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Left: Time Period */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b border-border pb-2">
+              <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+              Period Settings
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">{t('start_date')}</label>
+                <input 
+                  type="date" 
+                  value={startDate} 
+                  onChange={e => setStartDate(e.target.value)} 
+                  className="w-full h-11 bg-background border border-input rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">{t('end_date')}</label>
+                <input 
+                  type="date" 
+                  value={endDate} 
+                  onChange={e => setEndDate(e.target.value)} 
+                  className="w-full h-11 bg-background border border-input rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Investment Params */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2 border-b border-border pb-2">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+              Investment Settings
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">{t('amount')}</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                  <input 
+                    type="number" 
+                    value={amount} 
+                    onChange={e => setAmount(Number(e.target.value))} 
+                    className="w-full h-11 bg-background border border-input rounded-lg pl-7 pr-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none" 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground uppercase tracking-wide">{t('freq')}</label>
+                <select 
+                  value={frequency} 
+                  onChange={e => setFrequency(e.target.value)} 
+                  className="w-full h-11 bg-background border border-input rounded-lg px-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                >
+                  <option value="daily">{t('daily')}</option>
+                  <option value="weekly">{t('weekly')}</option>
+                  <option value="monthly">{t('monthly')}</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+
+        <div className="pt-2">
+          <button 
+            onClick={() => handleSearch()} 
+            disabled={loading} 
+            className="w-full h-12 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl font-bold text-lg hover:opacity-90 transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
+          >
+            {loading ? 'Running Simulation...' : t('analyze')}
+          </button>
         </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('amount')}</label>
-          <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
-        </div>
-        <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('freq')}</label>
-          <select value={frequency} onChange={e => setFrequency(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground">
-            <option value="daily">{t('daily')}</option>
-            <option value="weekly">{t('weekly')}</option>
-            <option value="monthly">{t('monthly')}</option>
-          </select>
-        </div>
-        <button onClick={() => handleSearch()} disabled={loading} className="md:col-span-4 bg-primary text-primary-foreground py-2 rounded-lg font-bold hover:opacity-90 transition-opacity">
-          {loading ? '...' : t('analyze')}
-        </button>
       </div>
 
       {data && !loading && (

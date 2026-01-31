@@ -1,6 +1,0 @@
-INFO:     Started server process [114049]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8081 (Press CTRL+C to quit)
-Fetching ^IXIC from 2021-01-01 to 2026-01-30
-INFO:     127.0.0.1:58000 - "GET /api/dca?ticker=%5EIXIC&start_date=2021-01-01&end_date=2026-01-30&amount=100&frequency=monthly HTTP/1.1" 200 OK

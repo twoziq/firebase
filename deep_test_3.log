@@ -1,6 +1,0 @@
-INFO:     Started server process [121226]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8081 (Press CTRL+C to quit)
-Attempt 1 (download): Fetching AAPL from 2010-01-01 to 2026-01-30
-INFO:     127.0.0.1:60730 - "GET /api/deep-analysis/AAPL?analysis_period=252 HTTP/1.1" 200 OK
