@@ -34,6 +34,10 @@ app_logger.addHandler(list_handler)
 
 app = FastAPI(title="Twoziq Finance API")
 
+@app.get("/api/logs")
+def get_server_logs():
+    return {"logs": list(SERVER_LOGS)}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,10 +48,6 @@ app.add_middleware(
 
 KST = pytz.timezone('Asia/Seoul')
 TOP_8 = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO']
-
-@app.get("/api/logs")
-def get_server_logs():
-    return {"logs": list(SERVER_LOGS)}
 
 @lru_cache(maxsize=128)
 def get_data(ticker: str, start: str = None, end: str = None):
@@ -87,92 +87,158 @@ def get_market_valuation():
     return {"weighted_pe": weighted_pe, "details": details}
 
 @app.get("/api/market/per-history")
-def get_per_history(period: str = "5y"):
+def get_per_history(period: str = "2y"):
+    # 1. Fetch Price History (Bulk)
     try:
         app_logger.info(f"Fetching history prices for {TOP_8} ({period})")
-        bulk_data = yf.download(TOP_8, period=period, progress=False, threads=True)
+        # Fetch extra data to cover start date calculation
+        # 5y allows for better TTM calculation overlap if needed, but 'period' arg dictates range
+        bulk_data = yf.download(TOP_8, period="5y", progress=False, threads=True)
         if bulk_data.empty: return {"dates": [], "values": []}
         
         if isinstance(bulk_data.columns, pd.MultiIndex):
             prices_df = bulk_data['Close']
         else:
             prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
+            
+        # Slice to requested period for display
+        if period == "1y":
+            start_idx = -252
+        elif period == "2y":
+            start_idx = -504
+        else:
+            start_idx = 0 # 5y default
+            
+        display_prices = prices_df.iloc[start_idx:]
+        
     except Exception as e:
         app_logger.error(f"Price fetch failed: {e}")
         return {"dates": [], "values": []}
 
+    # 2. Fetch Fundamentals (Parallel)
     fundamentals = {}
+    debug_info = {}
     
     def fetch_fund(t):
         try:
             tick = yf.Ticker(t)
             shares = tick.info.get('sharesOutstanding') or tick.fast_info.get('shares')
+            
+            # Quarterly Net Income
             fin = tick.quarterly_income_stmt
             if fin is None or fin.empty: fin = tick.quarterly_financials
             
-            return t, shares, fin
+            # Fallback to Annual if Quarterly missing
+            a_fin = tick.income_stmt
+            if a_fin is None or a_fin.empty: a_fin = tick.financials
+            
+            return t, shares, fin, a_fin
         except Exception as e:
             app_logger.warning(f"Fund fetch failed for {t}: {e}")
-            return t, None, None
+            return t, None, None, None
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(fetch_fund, t) for t in TOP_8]
         for future in as_completed(futures):
-            t, shares, fin = future.result()
-            if shares and fin is not None:
-                ni = None
-                for key in ['Net Income', 'Net Income Common Stockholders', 'Net Income Continuous Operations']:
-                    if key in fin.index:
-                        ni = fin.loc[key]
-                        break
+            t, shares, fin, a_fin = future.result()
+            
+            if shares:
+                # Extract Net Income
+                ni_series = None
+                source_type = 'none'
                 
-                if ni is not None:
-                    ni = ni.sort_index()
-                    fundamentals[t] = {'shares': shares, 'income': ni}
+                # Try Quarterly
+                if fin is not None:
+                    for key in ['Net Income', 'Net Income Common Stockholders']:
+                        if key in fin.index:
+                            ni_series = fin.loc[key]
+                            source_type = 'quarterly'
+                            break
+                
+                # Try Annual if Quarterly failed
+                if ni_series is None and a_fin is not None:
+                    for key in ['Net Income', 'Net Income Common Stockholders']:
+                        if key in a_fin.index:
+                            ni_series = a_fin.loc[key]
+                            source_type = 'annual'
+                            break
+                
+                if ni_series is not None:
+                    # Clean and sort
+                    ni_series = ni_series.sort_index()
+                    fundamentals[t] = {'shares': shares, 'income': ni_series, 'type': source_type}
+                    # Debug info (latest TTM approximation)
+                    debug_info[t] = {
+                        'shares': float(shares),
+                        'latest_income': float(ni_series.iloc[-1]),
+                        'source': source_type
+                    }
 
-    dates = prices_df.index
+    # 3. Calculate Daily Aggregate Data
+    dates = display_prices.index
     daily_total_mc = pd.Series(0.0, index=dates)
     daily_total_earn = pd.Series(0.0, index=dates)
     
     valid_tickers = []
     
     for t in TOP_8:
-        if t in prices_df.columns and t in fundamentals:
+        if t in display_prices.columns and t in fundamentals:
             shares = fundamentals[t]['shares']
             income_series = fundamentals[t]['income']
+            source_type = fundamentals[t]['type']
             
-            income_series.index = income_series.index + timedelta(days=45)
+            # TTM Calculation with Lag
+            # Lag: +45 days from quarter end
+            income_series.index = pd.to_datetime(income_series.index) + timedelta(days=45)
             
-            ttm_sparse = income_series.rolling(window=4, min_periods=1).sum()
-            ttm_daily = ttm_sparse.reindex(dates, method='ffill')
+            ttm_series = None
+            if source_type == 'quarterly':
+                # Rolling sum of last 4 quarters. min_periods=1 to fill start gaps (annualized)
+                def annualize(x):
+                    return x.sum() * (4 / max(len(x), 1))
+                ttm_series = income_series.rolling(window=4, min_periods=1).apply(annualize, raw=True)
+            else:
+                # Annual data is already 12-month sum
+                ttm_series = income_series
             
-            mc_daily = prices_df[t] * shares
+            # Reindex to daily (Forward Fill)
+            # Use 'prices_df' (full history) for reindex to ensure coverage, then slice
+            ttm_daily = ttm_series.reindex(prices_df.index, method='ffill')
+            ttm_daily_display = ttm_daily.loc[dates] # Slice to display period
             
-            common = mc_daily.index.intersection(ttm_daily.index)
+            # Market Cap
+            mc_daily = display_prices[t] * shares
+            
+            # Align
+            common = mc_daily.index.intersection(ttm_daily_display.index)
             if common.empty: continue
             
             daily_total_mc = daily_total_mc.add(mc_daily.loc[common], fill_value=0)
-            daily_total_earn = daily_total_earn.add(ttm_daily.loc[common], fill_value=0)
+            daily_total_earn = daily_total_earn.add(ttm_daily_display.loc[common], fill_value=0)
             valid_tickers.append(t)
 
     if not valid_tickers:
         return {"dates": [], "values": []}
 
+    # 4. Calculate Aggregate PER
     daily_total_earn = daily_total_earn.replace(0, np.nan)
     agg_per = daily_total_mc / daily_total_earn
     agg_per = agg_per.dropna()
     
+    # 5. Gap Adjustment (Calibration)
     try:
+        # Calculate 'Official' Yahoo-style PER for the last date
         ref_mc = 0
         ref_earn = 0
         for t in valid_tickers:
             tick = yf.Ticker(t)
+            # Use trailingPE from info (Official)
             pe = tick.info.get('trailingPE') or 30
-            price = prices_df[t].iloc[-1]
+            price = display_prices[t].iloc[-1]
             shares = fundamentals[t]['shares']
             mc = price * shares
             ref_mc += mc
-            ref_earn += mc / pe
+            if pe > 0: ref_earn += mc / pe
         
         target_pe = ref_mc / ref_earn if ref_earn > 0 else 0
         
@@ -180,15 +246,21 @@ def get_per_history(period: str = "5y"):
             my_last_pe = agg_per.iloc[-1]
             if my_last_pe > 0:
                 scale_factor = target_pe / my_last_pe
-                app_logger.info(f"Scaling PER history by {scale_factor:.4f} (Target: {target_pe:.2f}, Calc: {my_last_pe:.2f})")
+                app_logger.info(f"Gap Adjustment: Scaling by {scale_factor:.4f} (Target: {target_pe:.2f}, Calc: {my_last_pe:.2f})")
                 agg_per *= scale_factor
+                debug_info['scale_factor'] = float(scale_factor)
+                debug_info['target_pe'] = float(target_pe)
+                debug_info['calc_pe'] = float(my_last_pe)
     except Exception as e:
         app_logger.warning(f"Gap adjustment failed: {e}")
 
     return {
         "dates": agg_per.index.strftime('%Y-%m-%d').tolist(), 
-        "values": agg_per.round(1).tolist()
+        "values": agg_per.round(1).tolist(),
+        "debug_data": debug_info
     }
+
+# ... rest of API endpoints ...
 
 @app.get("/api/dca")
 def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
