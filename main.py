@@ -9,7 +9,35 @@ from functools import lru_cache
 import random
 from typing import List, Dict, Optional, Any
 
-app = FastAPI(title="Twoziq Finance API")
+import logging
+from collections import deque
+
+# --- In-Memory Logging Setup ---
+SERVER_LOGS = deque(maxlen=200)
+
+class ListHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            SERVER_LOGS.append(msg)
+        except Exception:
+            self.handleError(record)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("uvicorn")
+list_handler = ListHandler()
+list_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(list_handler)
+# Also capture app logs
+app_logger = logging.getLogger("twoziq")
+app_logger.setLevel(logging.INFO)
+app_logger.addHandler(list_handler)
+
+@app.get("/api/logs")
+def get_server_logs():
+    return {"logs": list(SERVER_LOGS)}
+
+# ... (rest of the file)
 
 app.add_middleware(
     CORSMiddleware,

@@ -25,16 +25,17 @@ export const MarketValuation = () => {
     Promise.all([fetchValuation, fetchHistory]).finally(() => setLoading(false));
   }, [period]);
 
-  if (loading) return <div className="text-center p-10 text-muted-foreground animate-pulse">Loading Market Data...</div>;
-  // If valuation data is missing, we can't show much, but let's try to show what we have or a specific error
-  if (!data) return (
+  // Only show full page loader on initial load if no data exists yet
+  if (loading && !data && !history) return <div className="text-center p-10 text-muted-foreground animate-pulse">Loading Market Data...</div>;
+  
+  if (!data && !loading) return (
     <div className="text-center p-10 space-y-4">
       <div className="text-red-400 font-bold">Failed to load market valuation data.</div>
       <button onClick={() => window.location.reload()} className="px-4 py-2 bg-muted rounded hover:bg-muted/80">Retry</button>
     </div>
   );
 
-  const chartData = history?.dates.map((date, i) => ({ date, value: history.values[i] })) || [];
+  const chartData = history?.dates?.map((date, i) => ({ date, value: history.values[i] })) || [];
 
   // Custom Tick Formatter: YY.MM at 3-month intervals
   const formatXAxis = (tickItem: string) => {
@@ -56,7 +57,8 @@ export const MarketValuation = () => {
   };
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-500 pb-20">
+    <div className={`space-y-12 animate-in fade-in duration-500 pb-20 relative ${loading ? 'opacity-70 pointer-events-none' : ''}`}>
+      {loading && <div className="absolute top-0 right-0 m-4 text-xs font-bold text-primary animate-pulse">Refreshing...</div>}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-foreground">Big Tech Valuation</h1>
         <p className="text-muted-foreground">{t('market')} - Top 8 Tech Giants</p>
@@ -78,26 +80,30 @@ export const MarketValuation = () => {
             ))}
           </div>
         </div>
-        <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
-              <XAxis 
-                dataKey="date" 
-                stroke="#9ca3af" 
-                fontSize={10} 
-                tickFormatter={formatXAxis}
-                minTickGap={30}
-              />
-              <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={10} tickFormatter={(v) => v.toFixed(1)} />
-              <Tooltip 
-                contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px'}} 
-                labelFormatter={(v) => `Date: ${v}`}
-                formatter={(v: any) => [Number(v || 0).toFixed(1), 'Weighted PER']}
-              />
-              <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={3} dot={false} animationDuration={1000} />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm flex items-center justify-center">
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="#9ca3af" 
+                  fontSize={10} 
+                  tickFormatter={formatXAxis}
+                  minTickGap={30}
+                />
+                <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={10} tickFormatter={(v) => v.toFixed(1)} />
+                <Tooltip 
+                  contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px'}} 
+                  labelFormatter={(v) => `Date: ${v}`}
+                  formatter={(v: any) => [Number(v || 0).toFixed(1), 'Weighted PER']}
+                />
+                <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={3} dot={false} animationDuration={1000} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-muted-foreground font-medium">Chart data unavailable</div>
+          )}
         </div>
       </div>
 
