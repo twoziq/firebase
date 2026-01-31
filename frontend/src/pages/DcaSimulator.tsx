@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { TickerCombobox } from '../components/TickerCombobox';
 import { api } from '../lib/api';
 import type { DcaData } from '../lib/types';
