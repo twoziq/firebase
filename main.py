@@ -128,11 +128,16 @@ def get_per_history(period: str = "2y"):
             # Get shares count (current) - approximation for history but acceptable
             shares = tick.info.get('sharesOutstanding') or tick.fast_info.get('shares')
             
-            # Get Quarterly Net Income for TTM calculation
-            # Use income_stmt (newer yfinance) or quarterly_financials
+            # 1. Try Quarterly Net Income (TTM) - Best for precision
             fin = tick.quarterly_income_stmt
             if fin is None or fin.empty:
                 fin = tick.quarterly_financials
+            
+            income_source = 'quarterly'
+            if fin is None or fin.empty:
+                # 2. Fallback to Annual Financials - Stability from Reference
+                fin = tick.financials
+                income_source = 'annual'
             
             if fin is None or fin.empty:
                 return t, None, None
@@ -144,35 +149,43 @@ def get_per_history(period: str = "2y"):
             elif 'Net Income Common Stockholders' in fin.index:
                 net_income = fin.loc['Net Income Common Stockholders']
                 
-            return t, shares, net_income
+            return t, shares, net_income, income_source
         except Exception as e:
             app_logger.warning(f"Failed fundamentals for {t}: {e}")
-            return t, None, None
+            return t, None, None, None
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(fetch_fundamentals, t) for t in TOP_8]
         for future in as_completed(futures):
-            t, shares, net_income = future.result()
+            t, shares, net_income, source = future.result()
             if shares and net_income is not None:
                 # Sort by date
                 net_income = net_income.sort_index()
-                financial_data[t] = {'shares': shares, 'income': net_income}
+                
+                if source == 'quarterly':
+                    # Calculate TTM (Sum of last 4 quarters)
+                    # Use min_periods=4 to ensure we have full year data for TTM
+                    earnings = net_income.rolling(window=4).sum().dropna()
+                else:
+                    # Annual data is already 12-month sum
+                    earnings = net_income
+                
+                if not earnings.empty:
+                    financial_data[t] = {'shares': shares, 'income': earnings}
 
     # 3. Calculate Weighted PER Daily
     # Reindex financials to daily prices (ffill)
     weighted_per_series = []
     dates = prices_df.index
     
-    # Pre-process earnings to TTM (Sum of last 4 quarters)
+    # Pre-process earnings to daily
     ttm_earnings = {}
     for t, data in financial_data.items():
-        inc = data['income']
-        # Rolling sum of last 4 quarters (TTM)
-        # Assuming quarterly data. If < 4 quarters, take available or skip.
-        ttm = inc.rolling(window=4).sum().dropna()
-        if not ttm.empty:
+        earnings = data['income']
+        if not earnings.empty:
             # Resample to daily to match prices, ffill
-            ttm_daily = ttm.reindex(dates, method='ffill')
+            # Earnings are reported on specific dates, apply forward fill
+            ttm_daily = earnings.reindex(dates, method='ffill')
             ttm_earnings[t] = ttm_daily
 
     # Calculate Daily Weighted PER
