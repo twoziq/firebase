@@ -65,7 +65,7 @@ def get_data(ticker: str, start: str = None, end: str = None):
     try:
         app_logger.info(f"Fetching {ticker} from {start} to {end} using Ticker.history()")
         tick = yf.Ticker(ticker)
-        df = tick.history(start=start, end=end, progress=False, timeout=30)
+        df = tick.history(start=start, end=end, timeout=30)
         if not df.empty:
             return df['Close']
     except Exception as e:
