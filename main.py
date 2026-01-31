@@ -53,7 +53,7 @@ TOP_8 = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO']
 def get_data(ticker: str, start: str = None, end: str = None):
     try:
         app_logger.info(f"Fetching {ticker} from {start} to {end}")
-        df = yf.download(ticker, start=start, end=end, progress=False)
+        df = yf.download(ticker, start=start, end=end, progress=False, timeout=30)
         if not df.empty:
             return df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
     except Exception as e:
