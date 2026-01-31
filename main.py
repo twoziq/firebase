@@ -357,24 +357,30 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         try:
             lookback = int(analysis_period)
             if len(price_vals) > lookback:
+                # Calculate rolling returns: (Price_today / Price_N_days_ago) - 1
+                # To match actual_past exactly, we use the same relative change
                 rolling_rets = (price_vals[lookback:] / price_vals[:-lookback]) - 1
                 rolling_rets_pct = rolling_rets * 100
-                current_ret_pct = rolling_rets_pct[-1]
+                
+                # current_1y_return MUST be the last value of actual_past scaled to %
+                # which is (recent_prices[-1] / recent_prices[0] - 1) * 100
+                current_ret_pct = ((price_vals[-1] / price_vals[-(lookback+1)]) - 1) * 100
+                
                 mean_ret = np.mean(rolling_rets_pct)
                 std_ret = np.std(rolling_rets_pct)
+                
                 if std_ret > 1e-6:
                     current_z = (current_ret_pct - mean_ret) / std_ret
                     z_history = ((rolling_rets_pct - mean_ret) / std_ret).tolist()
                 else:
                     current_z = 0.0
                     z_history = [0.0] * len(rolling_rets_pct)
+                
                 z_dates = prices.index[lookback:].strftime('%Y-%m-%d').tolist()
                 
-                # Improved Histogram calculation
-                # Use fixed bin width or precise range to avoid alignment issues
-                counts, bins = np.histogram(rolling_rets_pct, bins=50)
+                # Use enough bins for smooth distribution
+                counts, bins = np.histogram(rolling_rets_pct, bins=60)
                 hist_counts = counts.tolist()
-                # Center the bins for the frontend
                 hist_bins = ((bins[:-1] + bins[1:]) / 2).tolist()
             else:
                 mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
