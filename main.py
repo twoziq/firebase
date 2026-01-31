@@ -7,57 +7,11 @@ from datetime import datetime, timedelta
 import pytz
 from functools import lru_cache
 import random
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Any
 
-import json
-import os
-import time
-from contextlib import asynccontextmanager
-
-CACHE_DIR = "cache"
-os.makedirs(CACHE_DIR, exist_ok=True)
-
-def get_cached_data(filename: str, ttl_seconds: int = 3600):
-    """Load data from JSON file if it exists and is fresh."""
-    filepath = os.path.join(CACHE_DIR, filename)
-    if not os.path.exists(filepath):
-        return None
-    
-    try:
-        # Check if file is older than TTL
-        file_age = time.time() - os.path.getmtime(filepath)
-        if file_age > ttl_seconds:
-            return None # Expired
-            
-        with open(filepath, 'r') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Cache read error for {filename}: {e}")
-        return None
-
-def save_cached_data(filename: str, data: Any):
-    """Save data to JSON file."""
-    try:
-        filepath = os.path.join(CACHE_DIR, filename)
-        with open(filepath, 'w') as f:
-            json.dump(data, f)
-    except Exception as e:
-        print(f"Cache write error for {filename}: {e}")
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: Warm up cache in background
-    print("Server starting... Warming up cache...")
-    try:
-        # We trigger these but don't await them to block startup, 
-        # or we can run a simple pre-fetch if acceptable. 
-        # For simplicity in Cloud Run, we let the first request trigger or do a quick check.
-        pass 
-    except: pass
-    yield
-    # Shutdown logic if needed
-
-app = FastAPI(title="Twoziq Finance API", lifespan=lifespan)
+app = FastAPI(title="Twoziq Finance API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -102,31 +56,47 @@ def get_data(ticker: str, start: str = None, end: str = None):
 
 @app.get("/api/market/valuation")
 def get_market_valuation():
-    # Try Cache First (1 Hour TTL)
-    cached = get_cached_data("market_valuation.json", ttl_seconds=3600)
-    if cached:
-        print("Returning cached Market Valuation")
-        return cached
-
     total_mkt_cap, total_earn = 0, 0
     details = []
-    for t in TOP_8:
-        try:
-            dat = yf.Ticker(t)
-            info = dat.info
-            m = info.get('marketCap', 0)
-            p = info.get('trailingPE') or info.get('forwardPE') or 25
-            if m > 0 and p > 0:
-                total_mkt_cap += m
-                total_earn += m / p
-                details.append({"ticker": t, "pe": p, "market_cap": m})
-        except Exception as e:
-            print(f"Error fetching valuation for {t}: {e}")
-            continue
+    
+    def fetch_ticker_info(t):
+        for attempt in range(3): # Max 3 attempts
+            try:
+                dat = yf.Ticker(t)
+                # Try fast_info first for market cap (faster/reliable)
+                try:
+                    m = dat.fast_info['market_cap']
+                except:
+                    m = dat.info.get('marketCap', 0)
+                
+                # PE requires full info or calculation. Fallback to info.
+                info = dat.info
+                p = info.get('trailingPE') or info.get('forwardPE')
+                
+                if m > 0 and (p is None or p == 0): p = 25 # Fallback default
+                
+                if m > 0 and p > 0:
+                    return {"ticker": t, "pe": p, "market_cap": m}
+            except Exception as e:
+                print(f"Error fetching {t} (attempt {attempt+1}): {e}")
+                time.sleep(0.5)
+        return None
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(fetch_ticker_info, t) for t in TOP_8]
+        for future in as_completed(futures):
+            res = future.result()
+            if res:
+                details.append(res)
+    
+    # Sort by market cap descending
+    details.sort(key=lambda x: x['market_cap'], reverse=True)
+
+    for item in details:
+        total_mkt_cap += item['market_cap']
+        total_earn += item['market_cap'] / item['pe']
             
-    result = {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
-    save_cached_data("market_valuation.json", result)
-    return result
+    return {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
