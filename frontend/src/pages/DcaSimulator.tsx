@@ -4,9 +4,11 @@ import { api } from '../lib/api';
 import type { DcaData } from '../lib/types';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from 'recharts';
 import { useLanguage } from '../components/LanguageProvider';
+import { useTheme } from '../components/ThemeProvider';
 
 export const DcaSimulator = () => {
   const { t } = useLanguage();
+  const { theme } = useTheme();
   const [data, setData] = useState<DcaData | null>(null);
   const [loading, setLoading] = useState(false);
   
@@ -15,6 +17,9 @@ export const DcaSimulator = () => {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [amount, setAmount] = useState(1000);
   const [frequency, setFrequency] = useState('monthly');
+
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const priceColor = isDark ? "#e5e5e5" : "#4b5563";
 
   const handleSearch = useCallback((selectedTicker: string = ticker) => {
     setLoading(true);
@@ -130,7 +135,7 @@ export const DcaSimulator = () => {
           <button 
             onClick={() => handleSearch()} 
             disabled={loading} 
-            className="w-full h-12 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl font-bold text-lg hover:opacity-90 transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
+            className="w-full h-12 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-xl font-bold text-lg hover:opacity-90 transition-all shadow-lg shadow-purple-500/20 active:scale-[0.98]"
           >
             {loading ? 'Running Simulation...' : t('analyze')}
           </button>
@@ -157,7 +162,7 @@ export const DcaSimulator = () => {
                 <Legend />
                 <Area yAxisId="left" type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorValue)" name="Portfolio Value" strokeWidth={2} />
                 <Area yAxisId="left" type="step" dataKey="invested" stroke="#22c55e" strokeDasharray="5 5" fill="none" name="Invested Capital" strokeWidth={2} />
-                <Area yAxisId="right" type="monotone" dataKey="price" stroke="#e5e5e5" fill="none" strokeOpacity={0.5} name="Actual Price" strokeWidth={1} dot={false} />
+                <Area yAxisId="right" type="monotone" dataKey="price" stroke={priceColor} fill="none" strokeOpacity={0.5} name="Actual Price" strokeWidth={1} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

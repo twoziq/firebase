@@ -57,7 +57,7 @@ export const RiskReturnMap = () => {
         
         <div className="flex gap-2 w-full max-w-2xl">
           <input type="text" value={tickerInput} onChange={(e) => setTickerInput(e.target.value)} className="flex-1 bg-card border border-input rounded-lg px-4 py-2" />
-          <button onClick={handleAnalyze} disabled={loading} className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-bold">
+          <button onClick={handleAnalyze} disabled={loading} className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-lg font-bold hover:opacity-90 shadow-lg shadow-purple-500/20 active:scale-[0.98] transition-all">
             {loading ? '...' : t('analyze')}
           </button>
         </div>
