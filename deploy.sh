@@ -16,6 +16,8 @@ gcloud run deploy $SERVICE_NAME \
   --platform managed \
   --region $REGION \
   --allow-unauthenticated \
-  --project $PROJECT_ID
+  --project $PROJECT_ID \
+  --set-env-vars GEMINI_API_KEY=$GEMINI_API_KEY
 
 echo "Deployment finished."
+
