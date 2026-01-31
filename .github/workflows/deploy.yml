@@ -1,0 +1,25 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ "main" ] # main 브랜치에 푸시될 때 실행
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        # 여기서 GCloud 로그인을 대신 수행합니다.
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy
+        env:
+          # 아까 등록한 Gemini API 키를 배포 환경에 주입
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          chmod +x deploy.sh
+          ./deploy.sh
