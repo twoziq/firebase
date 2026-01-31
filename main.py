@@ -68,8 +68,10 @@ def get_market_valuation():
     def fetch_val(t):
         try:
             dat = yf.Ticker(t)
-            mc = dat.fast_info.get('market_cap')
-            if not mc: mc = dat.info.get('marketCap', 0)
+            # User feedback: info is more accurate for market cap than fast_info
+            mc = dat.info.get('marketCap', 0)
+            if not mc: mc = dat.fast_info.get('market_cap', 0)
+            
             pe = dat.info.get('trailingPE') or dat.info.get('forwardPE') or 30
             return t, mc, pe
         except: return t, 0, 30
