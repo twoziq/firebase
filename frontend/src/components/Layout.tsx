@@ -27,7 +27,7 @@ const SidebarItem = ({ icon: Icon, label, to, active }: { icon: any, label: stri
 );
 
 export const Layout = ({ children }: LayoutProps) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
   const { t } = useLanguage();
 
@@ -40,11 +40,19 @@ export const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex overflow-hidden transition-colors duration-300">
+      {/* Sidebar Overlay (only visible on small screens when sidebar is open) */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+
       {/* Sidebar */}
       <aside 
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0",
-          !isSidebarOpen && "-translate-x-full lg:hidden"
+          !isSidebarOpen && "-translate-x-full"
         )}
       >
         <div className="h-full flex flex-col">
@@ -87,7 +95,7 @@ export const Layout = ({ children }: LayoutProps) => {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="text-muted-foreground hover:text-foreground lg:hidden"
+              className="text-muted-foreground hover:text-foreground"
             >
               <Menu size={24} />
             </button>

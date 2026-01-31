@@ -65,7 +65,7 @@ export const DeepQuantAnalysis = () => {
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[50] py-4 border-b border-border">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6 sticky top-0 bg-background/95 backdrop-blur z-[20] py-4 border-b border-border">
         <div><h1 className="text-3xl font-bold text-foreground">{t('deep')}</h1><p className="text-muted-foreground">Historical Rolling Analysis</p></div>
         <TickerCombobox onSearch={(t) => { setTicker(t); fetchAnalysis(t, startDate, endDate, periodDays); }} isLoading={loading} initialValue={ticker} />
       </div>
@@ -73,11 +73,11 @@ export const DeepQuantAnalysis = () => {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm items-start">
         <div className="space-y-1">
           <label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
           {data?.first_date && <p className="text-[10px] text-muted-foreground mt-1">Listing Date: {data.first_date}</p>}
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">Period (Days)</label>
           <input type="number" value={periodDays} onChange={e => setPeriodDays(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />

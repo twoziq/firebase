@@ -63,10 +63,10 @@ export const DcaSimulator = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-card border border-border p-4 rounded-xl shadow-sm">
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('start_date')}</label>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('end_date')}</label>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full max-w-[180px] bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
         </div>
         <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase">{t('amount')}</label>
           <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground" />
@@ -103,7 +103,7 @@ export const DcaSimulator = () => {
                 <Legend />
                 <Area yAxisId="left" type="monotone" dataKey="value" stroke="#3b82f6" fillOpacity={1} fill="url(#colorValue)" name="Portfolio Value" strokeWidth={2} />
                 <Area yAxisId="left" type="step" dataKey="invested" stroke="#22c55e" strokeDasharray="5 5" fill="none" name="Invested Capital" strokeWidth={2} />
-                <Area yAxisId="right" type="monotone" dataKey="price" stroke="#6b7280" fill="none" strokeOpacity={0.5} name="Actual Price" strokeWidth={1} dot={false} />
+                <Area yAxisId="right" type="monotone" dataKey="price" stroke="#e5e5e5" fill="none" strokeOpacity={0.5} name="Actual Price" strokeWidth={1} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
