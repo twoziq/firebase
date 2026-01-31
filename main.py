@@ -106,7 +106,8 @@ def get_per_history(period: str = "2y"):
     # Bulk download is much faster
     try:
         app_logger.info(f"Bulk fetching history for {period}")
-        bulk_data = yf.download(TOP_8, period=period, progress=False)
+        # Disable threading to prevent potential crashes/timeouts in serverless env
+        bulk_data = yf.download(TOP_8, period=period, progress=False, threads=False)
         if isinstance(bulk_data.columns, pd.MultiIndex):
             prices_df = bulk_data['Close']
         else:
