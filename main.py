@@ -103,14 +103,11 @@ def get_per_history(period: str = "2y"):
     data_dict = {}
     mkt_caps, pes = {}, {}
     
-    # Reduce payload: Use top 3 representative tickers for history trend to ensure stability
-    # Fetching 8 tickers often causes timeout in serverless environment
-    REPRESENTATIVE_TICKERS = ['AAPL', 'MSFT', 'NVDA']
-    
+    # Use all TOP_8 tickers as requested
     try:
-        app_logger.info(f"Fetching history for {REPRESENTATIVE_TICKERS} over {period}")
-        # Disable threading for stability
-        bulk_data = yf.download(REPRESENTATIVE_TICKERS, period=period, progress=False, threads=False)
+        app_logger.info(f"Fetching history for {TOP_8} over {period}")
+        # Disable threading to prevent potential crashes/timeouts in serverless env
+        bulk_data = yf.download(TOP_8, period=period, progress=False, threads=False)
         
         if bulk_data.empty:
             app_logger.warning("History download returned empty dataframe")
@@ -119,14 +116,14 @@ def get_per_history(period: str = "2y"):
         if isinstance(bulk_data.columns, pd.MultiIndex):
             prices_df = bulk_data['Close']
         else:
-            # Handle single ticker case if list reduced to 1, though here we have 3
-            prices_df = pd.DataFrame({REPRESENTATIVE_TICKERS[0]: bulk_data['Close']})
+            # Handle single ticker case if list reduced to 1 (unlikely here but safe)
+            prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
             
     except Exception as e:
         app_logger.error(f"Bulk download failed: {e}")
         return {"dates": [], "values": []}
 
-    for t in REPRESENTATIVE_TICKERS:
+    for t in TOP_8:
         try:
             info = yf.Ticker(t).info
             mkt_caps[t] = info.get('marketCap', 1)
