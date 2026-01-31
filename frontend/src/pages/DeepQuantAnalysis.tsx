@@ -225,27 +225,67 @@ export const DeepQuantAnalysis = () => {
                                         </Bar>
                                                                                 <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
                                                                                 
-                                                                                {/* TODAY Arrow - Custom Marker pointing to the closest bin */}
-                                                                                {closestBinEntry && (
-                                                                                  <ReferenceLine 
-                                                                                    x={closestBinEntry.bin} 
-                                                                                    stroke="#ef4444" 
-                                                                                    strokeWidth={1}
-                                                                                    strokeDasharray="3 3"
-                                                                                    label={({viewBox}) => {
-                                                                                      return (
-                                                                                        <g>
-                                                                                          <text x={viewBox.x} y={viewBox.y} dy={-10} fill="#ef4444" fontSize={14} textAnchor="middle" fontWeight="bold">
-                                                                                            TODAY ({data.current_1y_return?.toFixed(1)}%)
-                                                                                          </text>
-                                                                                          <text x={viewBox.x} y={viewBox.y} dy={5} fill="#ef4444" fontSize={20} textAnchor="middle" fontWeight="bold">
-                                                                                            ▼
-                                                                                          </text>
-                                                                                        </g>
-                                                                                      );
-                                                                                    }} 
-                                                                                  />
-                                                                                )}
+                                                                                                                        {/* TODAY Arrow - Custom Marker pointing to the closest bin */}
+                                                                                
+                                                                                                                        {closestBinEntry && (
+                                                                                
+                                                                                                                          <ReferenceLine 
+                                                                                
+                                                                                                                            x={closestBinEntry.bin} 
+                                                                                
+                                                                                                                            stroke="#ef4444" 
+                                                                                
+                                                                                                                            strokeWidth={1}
+                                                                                
+                                                                                                                            strokeDasharray="3 3"
+                                                                                
+                                                                                                                            label={({viewBox}) => {
+                                                                                
+                                                                                                                              return (
+                                                                                
+                                                                                                                                <g>
+                                                                                
+                                                                                                                                  {/* Smaller inverted triangle, lowered height */}
+                                                                                
+                                                                                                                                  <path 
+                                                                                
+                                                                                                                                    d={`M${viewBox.x-15},${viewBox.y} L${viewBox.x+15},${viewBox.y} L${viewBox.x},${viewBox.y+15} Z`} 
+                                                                                
+                                                                                                                                    fill="#ef4444" 
+                                                                                
+                                                                                                                                  />
+                                                                                
+                                                                                                                                  <text 
+                                                                                
+                                                                                                                                    x={viewBox.x} 
+                                                                                
+                                                                                                                                    y={viewBox.y + 8} 
+                                                                                
+                                                                                                                                    fill="white" 
+                                                                                
+                                                                                                                                    fontSize={8} 
+                                                                                
+                                                                                                                                    textAnchor="middle" 
+                                                                                
+                                                                                                                                    fontWeight="bold"
+                                                                                
+                                                                                                                                  >
+                                                                                
+                                                                                                                                    today
+                                                                                
+                                                                                                                                  </text>
+                                                                                
+                                                                                                                                </g>
+                                                                                
+                                                                                                                              );
+                                                                                
+                                                                                                                            }} 
+                                                                                
+                                                                                                                          />
+                                                                                
+                                                                                                                        )}
+                                                                                
+                                                                                
                                                                               </BarChart>
                                                                             </ResponsiveContainer>
                                  </div>

@@ -369,7 +369,13 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
                     current_z = 0.0
                     z_history = [0.0] * len(rolling_rets_pct)
                 z_dates = prices.index[lookback:].strftime('%Y-%m-%d').tolist()
-                hist_counts, hist_bins = np.histogram(rolling_rets_pct, bins=100)
+                
+                # Improved Histogram calculation
+                # Use fixed bin width or precise range to avoid alignment issues
+                counts, bins = np.histogram(rolling_rets_pct, bins=50)
+                hist_counts = counts.tolist()
+                # Center the bins for the frontend
+                hist_bins = ((bins[:-1] + bins[1:]) / 2).tolist()
             else:
                 mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
                 z_history, z_dates, hist_bins, hist_counts = [], [], [], []
