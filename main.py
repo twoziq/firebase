@@ -10,6 +10,7 @@ import random
 from typing import List, Dict, Optional, Any
 import logging
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- In-Memory Logging Setup ---
 SERVER_LOGS = deque(maxlen=200)
@@ -100,77 +101,85 @@ def get_market_valuation():
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
-    data_dict = {}
-    mkt_caps, pes = {}, {}
-    
-    # Attempt 1: Fetch all 8 tickers (Primary Goal)
+    # 1. Download Price Data (Fast via Bulk Download)
     try:
-        app_logger.info(f"Fetch attempt 1: {TOP_8} over {period}")
+        app_logger.info(f"Fetching history prices for {TOP_8}")
+        # threads=True is generally safe for bulk download and much faster
         bulk_data = yf.download(TOP_8, period=period, progress=False, threads=True)
         
-        if not bulk_data.empty:
-            if isinstance(bulk_data.columns, pd.MultiIndex):
-                prices_df = bulk_data['Close']
-            else:
-                prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
-            
-            # Process fetching individual info for weighting (This might be the bottleneck, so be careful)
-            # If info fetch fails, we might want to fallback too, but let's try.
-            valid_tickers = []
-            for t in TOP_8:
-                try:
-                    info = yf.Ticker(t).info
-                    mkt_caps[t] = info.get('marketCap', 1)
-                    pes[t] = info.get('trailingPE') or info.get('forwardPE') or 30
-                    if t in prices_df.columns:
-                        data_dict[t] = prices_df[t]
-                        valid_tickers.append(t)
-                except: continue
-            
-            if data_dict:
-                df = pd.DataFrame(data_dict).ffill().bfill()
-                total_mkt_cap = sum(mkt_caps.values())
-                
-                total_earnings = 0
-                for t in pes:
-                    if pes[t] > 0:
-                        total_earnings += mkt_caps.get(t, 0) / pes[t]
-                        
-                avg_pe = total_mkt_cap / total_earnings if total_earnings > 0 else 0
-                
-                weighted_idx = pd.Series(0.0, index=df.index)
-                for t in data_dict:
-                    last_price = df[t].iloc[-1]
-                    if last_price > 0:
-                        weighted_idx += (df[t] / last_price) * (mkt_caps[t] / total_mkt_cap)
-                    
-                return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
+        if bulk_data.empty:
+            app_logger.error("Bulk download returned empty")
+            return {"dates": [], "values": []}
 
+        if isinstance(bulk_data.columns, pd.MultiIndex):
+            prices_df = bulk_data['Close']
+        else:
+            prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
+            
     except Exception as e:
-        app_logger.error(f"Primary fetch failed: {e}")
+        app_logger.error(f"Price download failed: {e}")
+        return {"dates": [], "values": []}
 
-    # Attempt 2: Fallback to QQQ (Representative Proxy)
-    try:
-        app_logger.info("Fetch attempt 2 (Fallback): QQQ")
-        qqq = yf.download("QQQ", period=period, progress=False)
-        if not qqq.empty:
-            # Assume QQQ trend represents the weighted index
-            # Scale it to a reasonable PER range (e.g., current avg ~30)
-            prices = qqq['Close']
-            if isinstance(prices, pd.DataFrame): prices = prices.iloc[:, 0]
+    # 2. Fetch Metadata (Market Cap, PE) in Parallel (The Bottleneck Fix)
+    mkt_caps = {}
+    pes = {}
+    
+    def fetch_meta(t):
+        try:
+            # fast_info is much faster/stable for market_cap
+            dat = yf.Ticker(t)
+            mc = dat.fast_info.get('market_cap')
             
-            # Normalize to start at 30 (approx PE) or just return price trend
-            # Better: Normalize to last value = 30 (Rough Market PE)
-            normalized = prices / prices.iloc[-1] * 32.5 
+            # If fast_info fails or we need PE, we might need .info (slower)
+            # PE is not in fast_info usually.
+            if not mc:
+                mc = dat.info.get('marketCap', 0)
             
-            return {
-                "dates": prices.index.strftime('%Y-%m-%d').tolist(), 
-                "values": normalized.round(1).tolist()
-            }
-    except Exception as e:
-        app_logger.error(f"Fallback fetch failed: {e}")
+            # Try to get PE from info
+            pe = dat.info.get('trailingPE') or dat.info.get('forwardPE')
+            
+            return t, mc, pe
+        except Exception:
+            return t, 0, 0
 
-    return {"dates": [], "values": []}
+    # Execute metadata fetch in parallel
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(fetch_meta, t) for t in TOP_8]
+        for future in as_completed(futures):
+            t, mc, pe = future.result()
+            if mc: mkt_caps[t] = mc
+            if pe: pes[t] = pe
+            # Fallback PE if missing but we have MC
+            if mc and not pe: pes[t] = 30 
+
+    # 3. Construct Weighted Index
+    data_dict = {}
+    for t in TOP_8:
+        if t in prices_df.columns and t in mkt_caps:
+            data_dict[t] = prices_df[t]
+    
+    if not data_dict: 
+        app_logger.error("No valid data combined")
+        return {"dates": [], "values": []}
+
+    df = pd.DataFrame(data_dict).ffill().bfill()
+    
+    total_mkt_cap = sum(mkt_caps.values())
+    total_earnings = 0
+    for t in data_dict.keys():
+        pe = pes.get(t, 30) # Default PE 30 if missing
+        if pe > 0:
+            total_earnings += mkt_caps[t] / pe
+            
+    avg_pe = total_mkt_cap / total_earnings if total_earnings > 0 else 0
+    
+    weighted_idx = pd.Series(0.0, index=df.index)
+    for t in data_dict.keys():
+        last_price = df[t].iloc[-1]
+        if last_price > 0:
+            weighted_idx += (df[t] / last_price) * (mkt_caps[t] / total_mkt_cap)
+        
+    return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
 
 @app.get("/api/dca")
 def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
