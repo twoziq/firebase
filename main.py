@@ -225,6 +225,8 @@ def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequenc
     if series is None or series.empty:
         raise HTTPException(status_code=404, detail=f"Price data for {ticker} not found.")
     
+    app_logger.info(f"DCA for {ticker}: Data received. Total days: {len(series)}. Start date: {series.index[0]}. End date: {series.index[-1]}.")
+
     total_invested, total_shares = 0, 0
     dates, invested_curve, valuation_curve = [], [], []
     freq_map = {"daily": "D", "weekly": "W-MON", "monthly": "MS"}
