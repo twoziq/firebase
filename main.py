@@ -103,12 +103,11 @@ def get_market_valuation():
 def get_per_history(period: str = "2y"):
     # 1. Download Price Data (Fast via Bulk Download)
     try:
-        app_logger.info(f"Fetching history prices for {TOP_8} (Parallel Optimized)")
+        app_logger.info(f"Fetching history prices for {TOP_8}")
         # threads=True is generally safe for bulk download and much faster
         bulk_data = yf.download(TOP_8, period=period, progress=False, threads=True)
         
         if bulk_data.empty:
-            app_logger.error("Bulk download returned empty")
             return {"dates": [], "values": []}
 
         if isinstance(bulk_data.columns, pd.MultiIndex):
@@ -120,66 +119,104 @@ def get_per_history(period: str = "2y"):
         app_logger.error(f"Price download failed: {e}")
         return {"dates": [], "values": []}
 
-    # 2. Fetch Metadata (Market Cap, PE) in Parallel (The Bottleneck Fix)
-    mkt_caps = {}
-    pes = {}
+    # 2. Fetch Shares & Earnings in Parallel
+    financial_data = {}
     
-    def fetch_meta(t):
+    def fetch_fundamentals(t):
         try:
-            # fast_info is much faster/stable for market_cap
-            dat = yf.Ticker(t)
-            mc = dat.fast_info.get('market_cap')
+            tick = yf.Ticker(t)
+            # Get shares count (current) - approximation for history but acceptable
+            shares = tick.info.get('sharesOutstanding') or tick.fast_info.get('shares')
             
-            # If fast_info fails or we need PE, we might need .info (slower)
-            # PE is not in fast_info usually.
-            if not mc:
-                mc = dat.info.get('marketCap', 0)
+            # Get Quarterly Net Income for TTM calculation
+            # Use income_stmt (newer yfinance) or quarterly_financials
+            fin = tick.quarterly_income_stmt
+            if fin is None or fin.empty:
+                fin = tick.quarterly_financials
             
-            # Try to get PE from info
-            pe = dat.info.get('trailingPE') or dat.info.get('forwardPE')
-            
-            return t, mc, pe
-        except Exception:
-            return t, 0, 0
+            if fin is None or fin.empty:
+                return t, None, None
+                
+            # Extract Net Income
+            net_income = None
+            if 'Net Income' in fin.index:
+                net_income = fin.loc['Net Income']
+            elif 'Net Income Common Stockholders' in fin.index:
+                net_income = fin.loc['Net Income Common Stockholders']
+                
+            return t, shares, net_income
+        except Exception as e:
+            app_logger.warning(f"Failed fundamentals for {t}: {e}")
+            return t, None, None
 
-    # Execute metadata fetch in parallel
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(fetch_meta, t) for t in TOP_8]
+        futures = [executor.submit(fetch_fundamentals, t) for t in TOP_8]
         for future in as_completed(futures):
-            t, mc, pe = future.result()
-            if mc: mkt_caps[t] = mc
-            if pe: pes[t] = pe
-            # Fallback PE if missing but we have MC
-            if mc and not pe: pes[t] = 30 
+            t, shares, net_income = future.result()
+            if shares and net_income is not None:
+                # Sort by date
+                net_income = net_income.sort_index()
+                financial_data[t] = {'shares': shares, 'income': net_income}
 
-    # 3. Construct Weighted Index
-    data_dict = {}
-    for t in TOP_8:
-        if t in prices_df.columns and t in mkt_caps:
-            data_dict[t] = prices_df[t]
+    # 3. Calculate Weighted PER Daily
+    # Reindex financials to daily prices (ffill)
+    weighted_per_series = []
+    dates = prices_df.index
     
-    if not data_dict: 
-        app_logger.error("No valid data combined")
+    # Pre-process earnings to TTM (Sum of last 4 quarters)
+    ttm_earnings = {}
+    for t, data in financial_data.items():
+        inc = data['income']
+        # Rolling sum of last 4 quarters (TTM)
+        # Assuming quarterly data. If < 4 quarters, take available or skip.
+        ttm = inc.rolling(window=4).sum().dropna()
+        if not ttm.empty:
+            # Resample to daily to match prices, ffill
+            ttm_daily = ttm.reindex(dates, method='ffill')
+            ttm_earnings[t] = ttm_daily
+
+    # Calculate Daily Weighted PER
+    # We need: Sum(Market Cap) / Sum(Earnings)  for each day
+    
+    daily_total_mc = pd.Series(0.0, index=dates)
+    daily_total_earn = pd.Series(0.0, index=dates)
+    
+    valid_tickers_count = 0
+    
+    for t in TOP_8:
+        if t in prices_df.columns and t in financial_data and t in ttm_earnings:
+            shares = financial_data[t]['shares']
+            price = prices_df[t]
+            earnings = ttm_earnings[t]
+            
+            # Market Cap = Price * Shares
+            mc = price * shares
+            
+            # Earnings is already TTM Net Income
+            
+            # Align indices
+            common_idx = mc.index.intersection(earnings.index)
+            if common_idx.empty: continue
+            
+            mc = mc.loc[common_idx]
+            earn = earnings.loc[common_idx]
+            
+            daily_total_mc = daily_total_mc.add(mc, fill_value=0)
+            daily_total_earn = daily_total_earn.add(earn, fill_value=0)
+            valid_tickers_count += 1
+            
+    if valid_tickers_count == 0:
+        app_logger.warning("No valid financials found for historical PER calc.")
         return {"dates": [], "values": []}
 
-    df = pd.DataFrame(data_dict).ffill().bfill()
+    # Avoid division by zero
+    market_pe_history = daily_total_mc / daily_total_earn.replace(0, np.nan)
+    market_pe_history = market_pe_history.dropna()
     
-    total_mkt_cap = sum(mkt_caps.values())
-    total_earnings = 0
-    for t in data_dict.keys():
-        pe = pes.get(t, 30) # Default PE 30 if missing
-        if pe > 0:
-            total_earnings += mkt_caps[t] / pe
-            
-    avg_pe = total_mkt_cap / total_earnings if total_earnings > 0 else 0
-    
-    weighted_idx = pd.Series(0.0, index=df.index)
-    for t in data_dict.keys():
-        last_price = df[t].iloc[-1]
-        if last_price > 0:
-            weighted_idx += (df[t] / last_price) * (mkt_caps[t] / total_mkt_cap)
-        
-    return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
+    return {
+        "dates": market_pe_history.index.strftime('%Y-%m-%d').tolist(), 
+        "values": market_pe_history.round(1).tolist()
+    }
 
 @app.get("/api/dca")
 def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
