@@ -68,34 +68,43 @@ def get_market_valuation():
     def fetch_val(t):
         try:
             dat = yf.Ticker(t)
-            # User feedback: info is more accurate for market cap than fast_info
             mc = dat.info.get('marketCap', 0)
             if not mc: mc = dat.fast_info.get('market_cap', 0)
             
-            pe = dat.info.get('trailingPE') or dat.info.get('forwardPE') or 30
-            return t, mc, pe
-        except: return t, 0, 30
+            # Use netIncomeToCommon for precise Earnings (User verified)
+            ni = dat.info.get('netIncomeToCommon', 0)
+            
+            # Fallback to PE if NI missing
+            pe = dat.info.get('trailingPE') or 30
+            
+            return t, mc, ni, pe
+        except: return t, 0, 0, 30
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(fetch_val, t) for t in TOP_8]
         for future in as_completed(futures):
-            t, mc, pe = future.result()
-            if mc > 0 and pe > 0:
+            t, mc, ni, pe = future.result()
+            if mc > 0:
                 total_mkt_cap += mc
-                total_earn += mc / pe
-                details.append({"ticker": t, "pe": pe, "market_cap": mc})
+                # Earnings: Use NI directly if avail, else derive from PE
+                earn = ni if ni > 0 else (mc / pe if pe > 0 else 0)
+                total_earn += earn
+                
+                # For display detail: Calc PE from MC/Earn
+                display_pe = mc / earn if earn > 0 else pe
+                details.append({"ticker": t, "pe": display_pe, "market_cap": mc})
     
     weighted_pe = total_mkt_cap / total_earn if total_earn > 0 else 0
     return {"weighted_pe": weighted_pe, "details": details}
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
-    # 1. Fetch Price History (Bulk)
+    # Reverted to Price-based Valuation Trend Logic (Reliable & Consistent) 
+    
+    # 1. Fetch Price History
     try:
         app_logger.info(f"Fetching history prices for {TOP_8} ({period})")
-        # Fetch extra data to cover start date calculation
-        # 5y allows for better TTM calculation overlap if needed, but 'period' arg dictates range
-        bulk_data = yf.download(TOP_8, period="5y", progress=False, threads=True)
+        bulk_data = yf.download(TOP_8, period=period, progress=False, threads=True)
         if bulk_data.empty: return {"dates": [], "values": []}
         
         if isinstance(bulk_data.columns, pd.MultiIndex):
@@ -103,166 +112,81 @@ def get_per_history(period: str = "2y"):
         else:
             prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
             
-        # Slice to requested period for display
-        if period == "1y":
-            start_idx = -252
-        elif period == "2y":
-            start_idx = -504
-        else:
-            start_idx = 0 # 5y default
-            
-        display_prices = prices_df.iloc[start_idx:]
-        
     except Exception as e:
         app_logger.error(f"Price fetch failed: {e}")
         return {"dates": [], "values": []}
 
-    # 2. Fetch Fundamentals (Parallel)
-    fundamentals = {}
-    debug_info = {}
+    # 2. Fetch Current Fundamentals (Parallel)
+    # Goal: Calculate EXACT Current Weighted PER
+    mkt_caps = {}
+    earnings_dict = {}
     
     def fetch_fund(t):
         try:
             tick = yf.Ticker(t)
-            shares = tick.info.get('sharesOutstanding') or tick.fast_info.get('shares')
+            mc = tick.info.get('marketCap', 0)
+            if not mc: mc = tick.fast_info.get('market_cap', 0)
             
-            # Quarterly Net Income
-            fin = tick.quarterly_income_stmt
-            if fin is None or fin.empty: fin = tick.quarterly_financials
+            # Use netIncomeToCommon (User verified source)
+            ni = tick.info.get('netIncomeToCommon', 0)
             
-            # Fallback to Annual if Quarterly missing
-            a_fin = tick.income_stmt
-            if a_fin is None or a_fin.empty: a_fin = tick.financials
+            # Fallback
+            pe = tick.info.get('trailingPE') or 30
             
-            return t, shares, fin, a_fin
-        except Exception as e:
-            app_logger.warning(f"Fund fetch failed for {t}: {e}")
-            return t, None, None, None
+            return t, mc, ni, pe
+        except: return t, 0, 0, 30
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(fetch_fund, t) for t in TOP_8]
         for future in as_completed(futures):
-            t, shares, fin, a_fin = future.result()
-            
-            if shares:
-                # Extract Net Income
-                ni_series = None
-                source_type = 'none'
-                
-                # Try Quarterly
-                if fin is not None:
-                    for key in ['Net Income', 'Net Income Common Stockholders']:
-                        if key in fin.index:
-                            ni_series = fin.loc[key]
-                            source_type = 'quarterly'
-                            break
-                
-                # Try Annual if Quarterly failed
-                if ni_series is None and a_fin is not None:
-                    for key in ['Net Income', 'Net Income Common Stockholders']:
-                        if key in a_fin.index:
-                            ni_series = a_fin.loc[key]
-                            source_type = 'annual'
-                            break
-                
-                if ni_series is not None:
-                    # Clean and sort
-                    ni_series = ni_series.sort_index()
-                    fundamentals[t] = {'shares': shares, 'income': ni_series, 'type': source_type}
-                    # Debug info (latest TTM approximation)
-                    debug_info[t] = {
-                        'shares': float(shares),
-                        'latest_income': float(ni_series.iloc[-1]),
-                        'source': source_type
-                    }
+            t, mc, ni, pe = future.result()
+            if mc > 0:
+                mkt_caps[t] = mc
+                # Use NI if available, else derive
+                earnings_dict[t] = ni if ni > 0 else (mc / pe if pe > 0 else 0)
 
-    # 3. Calculate Daily Aggregate Data
-    dates = display_prices.index
-    daily_total_mc = pd.Series(0.0, index=dates)
-    daily_total_earn = pd.Series(0.0, index=dates)
+    # 3. Calculate Current Weighted PER
+    total_mc = sum(mkt_caps.values())
+    total_earn = sum(earnings_dict.values())
     
-    valid_tickers = []
+    current_weighted_pe = total_mc / total_earn if total_earn > 0 else 0
+    app_logger.info(f"Current Weighted PE: {current_weighted_pe:.2f}")
+
+    # 4. Construct Weighted Price Index (History)
+    # We construct an index that starts from historical prices and lands on 1.0 (Current)
+    # Then multiply by current_weighted_pe.
     
-    for t in TOP_8:
-        if t in display_prices.columns and t in fundamentals:
-            shares = fundamentals[t]['shares']
-            income_series = fundamentals[t]['income']
-            source_type = fundamentals[t]['type']
-            
-            # TTM Calculation with Lag
-            # Lag: +45 days from quarter end
-            income_series.index = pd.to_datetime(income_series.index) + timedelta(days=45)
-            
-            ttm_series = None
-            if source_type == 'quarterly':
-                # Rolling sum of last 4 quarters. min_periods=1 to fill start gaps (annualized)
-                def annualize(x):
-                    return x.sum() * (4 / max(len(x), 1))
-                ttm_series = income_series.rolling(window=4, min_periods=1).apply(annualize, raw=True)
-            else:
-                # Annual data is already 12-month sum
-                ttm_series = income_series
-            
-            # Reindex to daily (Forward Fill)
-            # Use 'prices_df' (full history) for reindex to ensure coverage, then slice
-            ttm_daily = ttm_series.reindex(prices_df.index, method='ffill')
-            ttm_daily_display = ttm_daily.loc[dates] # Slice to display period
-            
-            # Market Cap
-            mc_daily = display_prices[t] * shares
-            
-            # Align
-            common = mc_daily.index.intersection(ttm_daily_display.index)
-            if common.empty: continue
-            
-            daily_total_mc = daily_total_mc.add(mc_daily.loc[common], fill_value=0)
-            daily_total_earn = daily_total_earn.add(ttm_daily_display.loc[common], fill_value=0)
-            valid_tickers.append(t)
-
-    if not valid_tickers:
-        return {"dates": [], "values": []}
-
-    # 4. Calculate Aggregate PER
-    daily_total_earn = daily_total_earn.replace(0, np.nan)
-    agg_per = daily_total_mc / daily_total_earn
-    agg_per = agg_per.dropna()
+    # Fill missing prices
+    df = prices_df.ffill().bfill()
     
-    # 5. Gap Adjustment (Calibration)
-    try:
-        # Calculate 'Official' Yahoo-style PER for the last date
-        ref_mc = 0
-        ref_earn = 0
-        for t in valid_tickers:
-            tick = yf.Ticker(t)
-            # Use trailingPE from info (Official)
-            pe = tick.info.get('trailingPE') or 30
-            price = display_prices[t].iloc[-1]
-            shares = fundamentals[t]['shares']
-            mc = price * shares
-            ref_mc += mc
-            if pe > 0: ref_earn += mc / pe
-        
-        target_pe = ref_mc / ref_earn if ref_earn > 0 else 0
-        
-        if target_pe > 0 and not agg_per.empty:
-            my_last_pe = agg_per.iloc[-1]
-            if my_last_pe > 0:
-                scale_factor = target_pe / my_last_pe
-                app_logger.info(f"Gap Adjustment: Scaling by {scale_factor:.4f} (Target: {target_pe:.2f}, Calc: {my_last_pe:.2f})")
-                agg_per *= scale_factor
-                debug_info['scale_factor'] = float(scale_factor)
-                debug_info['target_pe'] = float(target_pe)
-                debug_info['calc_pe'] = float(my_last_pe)
-    except Exception as e:
-        app_logger.warning(f"Gap adjustment failed: {e}")
-
+    # Identify valid tickers (intersection of prices and fetched info)
+    valid_tickers = [t for t in TOP_8 if t in df.columns and t in mkt_caps]
+    if not valid_tickers: return {"dates": [], "values": []}
+    
+    # Calculate Weighted Index
+    weighted_idx = pd.Series(0.0, index=df.index)
+    
+    for t in valid_tickers:
+        current_price = df[t].iloc[-1]
+        if current_price > 0:
+            # Weight based on Current Market Cap
+            weight = mkt_caps[t] / total_mc
+            # Price Trend (Normalized to 1.0 at end)
+            price_trend = df[t] / current_price
+            
+            weighted_idx += price_trend * weight
+            
+    # Final PER History = Index * Current PER
+    # This ensures the last value matches 'current_weighted_pe' exactly.
+    # And historical values represent "Valuation relative to today based on price".
+    per_history = weighted_idx * current_weighted_pe
+    
     return {
-        "dates": agg_per.index.strftime('%Y-%m-%d').tolist(), 
-        "values": agg_per.round(1).tolist(),
-        "debug_data": debug_info
+        "dates": per_history.index.strftime('%Y-%m-%d').tolist(), 
+        "values": per_history.round(1).tolist()
     }
 
-# ... rest of API endpoints ...
+# ... rest of API endpoints (dca, risk, deep, listing_date, safe_float, clean_data, main) ...
 
 @app.get("/api/dca")
 def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
