@@ -63,12 +63,13 @@ TOP_8 = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO']
 @lru_cache(maxsize=128)
 def get_data(ticker: str, start: str = None, end: str = None):
     try:
-        app_logger.info(f"Fetching {ticker} from {start} to {end}")
-        df = yf.download(ticker, start=start, end=end, progress=False, timeout=30)
+        app_logger.info(f"Fetching {ticker} from {start} to {end} using Ticker.history()")
+        tick = yf.Ticker(ticker)
+        df = tick.history(start=start, end=end, progress=False, timeout=30)
         if not df.empty:
-            return df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
+            return df['Close']
     except Exception as e:
-        app_logger.error(f"Failed for {ticker}: {e}")
+        app_logger.error(f"Failed for {ticker} using Ticker.history(): {e}")
     return None
 
 @app.get("/api/market/valuation")
