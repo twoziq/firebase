@@ -9,7 +9,7 @@ import { LanguageProvider } from './components/LanguageProvider';
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="twoziq-theme">
+    <ThemeProvider defaultTheme="light" storageKey="twoziq-theme">
       <LanguageProvider>
         <Router>
           <Layout>

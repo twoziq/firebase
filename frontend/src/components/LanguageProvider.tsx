@@ -10,6 +10,8 @@ type LanguageProviderState = {
   lang: Language
   setLang: (lang: Language) => void
   t: (key: string) => string
+  isFunnyMode: boolean
+  setFunnyMode: (v: boolean) => void
 }
 
 const translations: Record<Language, Record<string, string>> = {
@@ -61,19 +63,32 @@ const translations: Record<Language, Record<string, string>> = {
   }
 }
 
+const funnyTranslations: Record<string, string> = {
+  market: "거품 판독기",
+  dca: "껄무새",
+  risk: "상남자 테스트",
+  deep: "운빨 검증기"
+}
+
 const LanguageContext = createContext<LanguageProviderState | undefined>(undefined)
 
 export function LanguageProvider({ children }: LanguageProviderProps) {
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem("twoziq-lang") as Language) || "KO")
+  const [isFunnyMode, setFunnyMode] = useState(false)
 
   useEffect(() => {
     localStorage.setItem("twoziq-lang", lang)
   }, [lang])
 
-  const t = (key: string) => translations[lang][key] || key
+  const t = (key: string) => {
+    if (isFunnyMode && lang === "KO" && funnyTranslations[key]) {
+      return funnyTranslations[key]
+    }
+    return translations[lang][key] || key
+  }
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t }}>
+    <LanguageContext.Provider value={{ lang, setLang, t, isFunnyMode, setFunnyMode }}>
       {children}
     </LanguageContext.Provider>
   )
