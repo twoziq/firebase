@@ -192,11 +192,16 @@ def clean_data(data):
         return {k: clean_data(v) for k, v in data.items()}
     elif isinstance(data, (float, np.floating, int, np.integer)):
         return safe_float(data)
+    elif isinstance(data, np.ndarray):
+        return clean_data(data.tolist())
+    elif isinstance(data, pd.Series):
+        return clean_data(data.tolist())
     return data
 
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252, forecast_days: int = 252):
     try:
+        # ... (Previous code remains roughly same, but wrapped in try block) ...
         print(f"Deep Analysis Request: {ticker}, {start_date} ~ {end_date}")
         if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
         
@@ -223,7 +228,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
             sigma = np.std(log_returns)
             
             num_simulations = 1000
-            sim_days = forecast_days
+            sim_days = int(forecast_days)
             last_price = price_vals[-1]
             
             random_shocks = np.random.normal(0, 1, (num_simulations, sim_days))
@@ -245,18 +250,18 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         # --- DCA vs Lump Sum Simulation (Past/Recent) ---
         try:
             if len(price_vals) > forecast_days:
-                recent_prices = price_vals[-forecast_days:]
+                recent_prices = price_vals[-int(forecast_days):]
             else:
                 recent_prices = price_vals
                 
             lump_perf = (recent_prices / recent_prices[0] * 100).tolist()
             
-            dca_shares = 0
-            dca_cost = 0
+            dca_shares = 0.0
+            dca_cost = 0.0
             dca_perf = []
             for p in recent_prices:
-                dca_shares += 1 / p 
-                dca_cost += 1
+                dca_shares += 1.0 / p 
+                dca_cost += 1.0
                 val = dca_shares * p
                 ret = (val / dca_cost) * 100
                 dca_perf.append(ret)
@@ -278,7 +283,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
 
         # --- 3. Quant (Rolling) ---
         try:
-            lookback = analysis_period
+            lookback = int(analysis_period)
             if len(price_vals) > lookback:
                 rolling_rets = (price_vals[lookback:] / price_vals[:-lookback]) - 1
                 rolling_rets_pct = rolling_rets * 100
@@ -286,7 +291,6 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
                 mean_ret = np.mean(rolling_rets_pct)
                 std_ret = np.std(rolling_rets_pct)
                 
-                # Prevent division by zero
                 if std_ret > 1e-6:
                     current_z = (current_ret_pct - mean_ret) / std_ret
                     z_history = ((rolling_rets_pct - mean_ret) / std_ret).tolist()
@@ -307,9 +311,11 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         # --- 4. Trend ---
         try:
             x = np.arange(len(price_vals))
-            slope, intercept = np.polyfit(x, np.log(price_vals), 1)
+            # Handle potential log(0) or log(negative)
+            safe_prices = np.maximum(price_vals, 1e-4)
+            slope, intercept = np.polyfit(x, np.log(safe_prices), 1)
             trend_line = np.exp(slope * x + intercept)
-            std_resid = np.std(np.log(price_vals) - np.log(trend_line))
+            std_resid = np.std(np.log(safe_prices) - np.log(trend_line))
             
             trend_dates = prices.index.strftime('%Y-%m-%d').tolist()
             trend_prices = price_vals.tolist()
@@ -359,8 +365,9 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
     except Exception as e:
         print(f"CRITICAL Error in get_deep_analysis: {e}")
         import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        err_msg = traceback.format_exc()
+        print(err_msg)
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}\n\nTraceback:\n{err_msg}")
 
 if __name__ == "__main__":
     import uvicorn
