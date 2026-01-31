@@ -12,17 +12,27 @@ export const MarketValuation = () => {
   const { t } = useLanguage();
 
   useEffect(() => {
-    Promise.all([
-      api.get<MarketValuationData>('/api/market/valuation'),
-      api.get<{dates: string[], values: number[]}>(`/api/market/per-history?period=${period}`)
-    ]).then(([res1, res2]) => {
-      setData(res1.data);
-      setHistory(res2.data);
-    }).finally(() => setLoading(false));
+    setLoading(true);
+    
+    const fetchValuation = api.get<MarketValuationData>('/api/market/valuation')
+      .then(res => setData(res.data))
+      .catch(err => console.error("Valuation fetch failed:", err));
+
+    const fetchHistory = api.get<{dates: string[], values: number[]}>(`/api/market/per-history?period=${period}`)
+      .then(res => setHistory(res.data))
+      .catch(err => console.error("History fetch failed:", err));
+
+    Promise.all([fetchValuation, fetchHistory]).finally(() => setLoading(false));
   }, [period]);
 
   if (loading) return <div className="text-center p-10 text-muted-foreground animate-pulse">Loading Market Data...</div>;
-  if (!data) return <div className="text-center p-10 text-red-400">Error loading data.</div>;
+  // If valuation data is missing, we can't show much, but let's try to show what we have or a specific error
+  if (!data) return (
+    <div className="text-center p-10 space-y-4">
+      <div className="text-red-400 font-bold">Failed to load market valuation data.</div>
+      <button onClick={() => window.location.reload()} className="px-4 py-2 bg-muted rounded hover:bg-muted/80">Retry</button>
+    </div>
+  );
 
   const chartData = history?.dates.map((date, i) => ({ date, value: history.values[i] })) || [];
 
