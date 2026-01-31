@@ -9,7 +9,55 @@ from functools import lru_cache
 import random
 from typing import List, Dict, Optional, Any
 
-app = FastAPI(title="Twoziq Finance API")
+import json
+import os
+import time
+from contextlib import asynccontextmanager
+
+CACHE_DIR = "cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def get_cached_data(filename: str, ttl_seconds: int = 3600):
+    """Load data from JSON file if it exists and is fresh."""
+    filepath = os.path.join(CACHE_DIR, filename)
+    if not os.path.exists(filepath):
+        return None
+    
+    try:
+        # Check if file is older than TTL
+        file_age = time.time() - os.path.getmtime(filepath)
+        if file_age > ttl_seconds:
+            return None # Expired
+            
+        with open(filepath, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Cache read error for {filename}: {e}")
+        return None
+
+def save_cached_data(filename: str, data: Any):
+    """Save data to JSON file."""
+    try:
+        filepath = os.path.join(CACHE_DIR, filename)
+        with open(filepath, 'w') as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"Cache write error for {filename}: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Warm up cache in background
+    print("Server starting... Warming up cache...")
+    try:
+        # We trigger these but don't await them to block startup, 
+        # or we can run a simple pre-fetch if acceptable. 
+        # For simplicity in Cloud Run, we let the first request trigger or do a quick check.
+        pass 
+    except: pass
+    yield
+    # Shutdown logic if needed
+
+app = FastAPI(title="Twoziq Finance API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,6 +102,12 @@ def get_data(ticker: str, start: str = None, end: str = None):
 
 @app.get("/api/market/valuation")
 def get_market_valuation():
+    # Try Cache First (1 Hour TTL)
+    cached = get_cached_data("market_valuation.json", ttl_seconds=3600)
+    if cached:
+        print("Returning cached Market Valuation")
+        return cached
+
     total_mkt_cap, total_earn = 0, 0
     details = []
     for t in TOP_8:
@@ -69,10 +123,20 @@ def get_market_valuation():
         except Exception as e:
             print(f"Error fetching valuation for {t}: {e}")
             continue
-    return {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
+            
+    result = {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
+    save_cached_data("market_valuation.json", result)
+    return result
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
+    # Cache per period (12 Hour TTL for history)
+    cache_key = f"per_history_{period}.json"
+    cached = get_cached_data(cache_key, ttl_seconds=43200)
+    if cached:
+        print(f"Returning cached History for {period}")
+        return cached
+
     data_dict = {}
     mkt_caps, pes = {}, {}
     
@@ -113,7 +177,9 @@ def get_per_history(period: str = "2y"):
         if last_price > 0:
             weighted_idx += (df[t] / last_price) * (mkt_caps[t] / total_mkt_cap)
         
-    return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
+    result = {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
+    save_cached_data(cache_key, result)
+    return result
 
 @app.get("/api/dca")
 def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
