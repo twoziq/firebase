@@ -177,6 +177,23 @@ def get_listing_date(ticker: str):
         print(f"Error getting listing date for {ticker}: {e}")
     return "Unknown"
 
+def safe_float(val):
+    try:
+        if val is None: return 0.0
+        f = float(val)
+        if np.isnan(f) or np.isinf(f): return 0.0
+        return f
+    except: return 0.0
+
+def clean_data(data):
+    if isinstance(data, list):
+        return [clean_data(x) for x in data]
+    elif isinstance(data, dict):
+        return {k: clean_data(v) for k, v in data.items()}
+    elif isinstance(data, (float, np.floating, int, np.integer)):
+        return safe_float(data)
+    return data
+
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252, forecast_days: int = 252):
     try:
@@ -268,8 +285,15 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
                 current_ret_pct = rolling_rets_pct[-1]
                 mean_ret = np.mean(rolling_rets_pct)
                 std_ret = np.std(rolling_rets_pct)
-                current_z = (current_ret_pct - mean_ret) / std_ret if std_ret > 0 else 0
-                z_history = ((rolling_rets_pct - mean_ret) / std_ret).tolist()
+                
+                # Prevent division by zero
+                if std_ret > 1e-6:
+                    current_z = (current_ret_pct - mean_ret) / std_ret
+                    z_history = ((rolling_rets_pct - mean_ret) / std_ret).tolist()
+                else:
+                    current_z = 0.0
+                    z_history = [0.0] * len(rolling_rets_pct)
+                    
                 z_dates = prices.index[lookback:].strftime('%Y-%m-%d').tolist()
                 hist_counts, hist_bins = np.histogram(rolling_rets_pct, bins=100)
             else:
@@ -304,7 +328,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
             print(f"Listing Date Error: {e}")
             listing_date = prices.index[0].strftime('%Y-%m-%d') # Fallback
         
-        return {
+        response_payload = {
             "ticker": ticker, 
             "first_date": listing_date,
             "current_price": float(price_vals[-1]),
@@ -329,6 +353,9 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
             },
             "simulation": simulation_data
         }
+        
+        return clean_data(response_payload)
+        
     except Exception as e:
         print(f"CRITICAL Error in get_deep_analysis: {e}")
         import traceback
