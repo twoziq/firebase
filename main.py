@@ -38,6 +38,17 @@ app = FastAPI(title="Twoziq Finance API")
 def get_server_logs():
     return {"logs": list(SERVER_LOGS)}
 
+@app.get("/api/cache/clear")
+def clear_all_caches():
+    try:
+        get_data.cache_clear()
+        get_listing_date.cache_clear()
+        app_logger.info("All LRU caches have been cleared.")
+        return {"message": "All caches cleared successfully."}
+    except Exception as e:
+        app_logger.error(f"Error clearing caches: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear caches.")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
