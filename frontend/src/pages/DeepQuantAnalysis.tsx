@@ -69,6 +69,13 @@ export const DeepQuantAnalysis = () => {
       )
     : null;
 
+  // Find the bin entry closest to the mean for accurate positioning of the Mean line
+  const closestMeanEntry = (histData.length > 0 && data?.quant?.mean !== undefined)
+    ? histData.reduce((prev, curr) => 
+        Math.abs(curr.val - data.quant.mean) < Math.abs(prev.val - data.quant.mean) ? curr : prev
+      )
+    : null;
+
   const zHistoryData = data?.quant?.z_history?.map((z, i) => ({
     date: data.quant.z_dates[i], 
     z: z
@@ -235,21 +242,47 @@ export const DeepQuantAnalysis = () => {
 
                                                                       
 
-                                                                      {/* Mean Line: Green Dashed */}
+                                                                                                              {/* Mean Line: Green Dashed - Snaps to the closest bin for consistent visibility */}
 
-                                                                      <ReferenceLine 
+                                                                      
 
-                                                                        x={data.quant?.mean?.toFixed(0) + '%'} 
+                                                                                                              {closestMeanEntry && (
 
-                                                                        stroke="#22c55e" 
+                                                                      
 
-                                                                        strokeWidth={2}
+                                                                                                                <ReferenceLine 
 
-                                                                        strokeDasharray="5 5" 
+                                                                      
 
-                                                                        label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 11, fontWeight: 'bold'}} 
+                                                                                                                  x={closestMeanEntry.bin} 
 
-                                                                      />
+                                                                      
+
+                                                                                                                  stroke="#22c55e" 
+
+                                                                      
+
+                                                                                                                  strokeWidth={2}
+
+                                                                      
+
+                                                                                                                  strokeDasharray="5 5" 
+
+                                                                      
+
+                                                                                                                  label={{position: 'top', value: `Mean (${data.quant?.mean?.toFixed(1)}%)`, fill: '#22c55e', fontSize: 11, fontWeight: 'bold'}} 
+
+                                                                      
+
+                                                                                                                />
+
+                                                                      
+
+                                                                                                              )}
+
+                                                                      
+
+                                                                      
 
                                                                       
 
