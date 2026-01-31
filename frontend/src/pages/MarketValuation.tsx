@@ -67,7 +67,7 @@ export const MarketValuation = () => {
       <div className="flex justify-center">
         <div className="relative w-64 h-64 bg-card rounded-full border-4 border-primary/20 flex flex-col items-center justify-center shadow-xl">
            <span className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Market PER</span>
-           <span className="text-6xl font-black text-foreground">{data.weighted_pe.toFixed(1)}</span>
+           <span className="text-6xl font-black text-foreground">{data?.weighted_pe?.toFixed(1) || "0.0"}</span>
         </div>
       </div>
 
@@ -108,7 +108,7 @@ export const MarketValuation = () => {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {data.details.map((item) => {
+        {data?.details?.map((item) => {
           const earnings = item.market_cap / item.pe;
           return (
             <div key={item.ticker} className="group relative bg-card border border-border p-5 rounded-2xl shadow-sm hover:border-primary/50 transition-all duration-300 overflow-hidden cursor-default">
