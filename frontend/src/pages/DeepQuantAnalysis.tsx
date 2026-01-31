@@ -57,7 +57,7 @@ export const DeepQuantAnalysis = () => {
   })) || [];
 
   const histData = data?.quant?.bins?.map((bin, i) => ({
-    bin: bin.toFixed(0) + '%', 
+    bin: bin.toFixed(1) + '%', 
     val: bin, 
     count: data.quant.counts[i]
   })) || [];

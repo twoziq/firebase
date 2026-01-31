@@ -357,14 +357,14 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         try:
             lookback = int(analysis_period)
             if len(price_vals) > lookback:
-                # Calculate rolling returns: (Price_today / Price_N_days_ago) - 1
-                # To match actual_past exactly, we use the same relative change
+                # Use a sliding window to calculate returns for all possible dates
                 rolling_rets = (price_vals[lookback:] / price_vals[:-lookback]) - 1
                 rolling_rets_pct = rolling_rets * 100
                 
-                # current_1y_return MUST be the last value of actual_past scaled to %
-                # which is (recent_prices[-1] / recent_prices[0] - 1) * 100
-                current_ret_pct = ((price_vals[-1] / price_vals[-(lookback+1)]) - 1) * 100
+                # Use exact prices for the current return calculation
+                p_end = price_vals[-1]
+                p_start = price_vals[-(lookback + 1)] if len(price_vals) > lookback else price_vals[0]
+                current_ret_pct = ((p_end / p_start) - 1) * 100
                 
                 mean_ret = np.mean(rolling_rets_pct)
                 std_ret = np.std(rolling_rets_pct)
@@ -378,10 +378,10 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
                 
                 z_dates = prices.index[lookback:].strftime('%Y-%m-%d').tolist()
                 
-                # Use enough bins for smooth distribution
+                # Histogram with fixed number of bins, ensuring we return valid python types
                 counts, bins = np.histogram(rolling_rets_pct, bins=60)
-                hist_counts = counts.tolist()
-                hist_bins = ((bins[:-1] + bins[1:]) / 2).tolist()
+                hist_counts = [float(c) for c in counts]
+                hist_bins = [float((bins[i] + bins[i+1])/2) for i in range(len(counts))]
             else:
                 mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
                 z_history, z_dates, hist_bins, hist_counts = [], [], [], []
