@@ -103,7 +103,7 @@ def get_market_valuation():
 def get_per_history(period: str = "2y"):
     # 1. Download Price Data (Fast via Bulk Download)
     try:
-        app_logger.info(f"Fetching history prices for {TOP_8}")
+        app_logger.info(f"Fetching history prices for {TOP_8} (Parallel Optimized)")
         # threads=True is generally safe for bulk download and much faster
         bulk_data = yf.download(TOP_8, period=period, progress=False, threads=True)
         
