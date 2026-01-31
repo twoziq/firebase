@@ -58,45 +58,60 @@ def get_market_valuation():
     details = []
     for t in TOP_8:
         try:
-            info = yf.Ticker(t).info
+            dat = yf.Ticker(t)
+            info = dat.info
             m = info.get('marketCap', 0)
-            p = info.get('trailingPE') or info.get('forwardPE', 30)
-            if m > 0:
+            p = info.get('trailingPE') or info.get('forwardPE') or 25
+            if m > 0 and p > 0:
                 total_mkt_cap += m
                 total_earn += m / p
                 details.append({"ticker": t, "pe": p, "market_cap": m})
-        except: continue
+        except Exception as e:
+            print(f"Error fetching valuation for {t}: {e}")
+            continue
     return {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
     data_dict = {}
     mkt_caps, pes = {}, {}
+    
+    # Bulk download is much faster
+    try:
+        bulk_data = yf.download(TOP_8, period=period, progress=False)
+        if isinstance(bulk_data.columns, pd.MultiIndex):
+            prices_df = bulk_data['Close']
+        else:
+            prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
+    except Exception as e:
+        print(f"Bulk download failed: {e}")
+        return {"dates": [], "values": []}
+
     for t in TOP_8:
         try:
             info = yf.Ticker(t).info
             mkt_caps[t] = info.get('marketCap', 1)
-            pes[t] = info.get('trailingPE') or info.get('forwardPE', 30)
-            series = yf.download(t, period=period, progress=False)
-            if not series.empty:
-                data_dict[t] = series['Close'].iloc[:, 0] if isinstance(series.columns, pd.MultiIndex) else series['Close']
+            pes[t] = info.get('trailingPE') or info.get('forwardPE') or 25
+            if t in prices_df.columns:
+                data_dict[t] = prices_df[t]
         except: continue
+        
     if not data_dict: return {"dates": [], "values": []}
     df = pd.DataFrame(data_dict).ffill().bfill()
     total_mkt_cap = sum(mkt_caps.values())
-    weighted_idx = pd.Series(0.0, index=df.index)
     
-    # Calculate Total Earnings for the group to get a proper weighted PE
     total_earnings = 0
     for t in pes:
         if pes[t] > 0:
-            total_earnings += mkt_caps[t] / pes[t]
+            total_earnings += mkt_caps.get(t, 0) / pes[t]
             
-    # True Market PE = Total Market Cap / Total Earnings
     avg_pe = total_mkt_cap / total_earnings if total_earnings > 0 else 0
     
+    weighted_idx = pd.Series(0.0, index=df.index)
     for t in data_dict:
-        weighted_idx += (df[t] / df[t].iloc[-1]) * (mkt_caps[t] / total_mkt_cap)
+        last_price = df[t].iloc[-1]
+        if last_price > 0:
+            weighted_idx += (df[t] / last_price) * (mkt_caps[t] / total_mkt_cap)
         
     return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
 
@@ -148,15 +163,18 @@ def get_risk_return(tickers: str):
 @lru_cache(maxsize=128)
 def get_listing_date(ticker: str):
     try:
-        # Fetch max history metadata only (limit to 1 row if possible, but yf history metadata needs fetch)
-        # Using history(period="max") is the reliable way to find start. 
-        # To minimize data transfer, we can just check the index.
         dat = yf.Ticker(ticker)
+        # Try to get from metadata first (fastest)
+        if hasattr(dat, 'history_metadata') and 'firstTradeDate' in dat.history_metadata:
+            ts = dat.history_metadata['firstTradeDate']
+            return datetime.fromtimestamp(ts, tz=KST).strftime('%Y-%m-%d')
+        
+        # Fallback: Still use period="max" but it's the only way if metadata is missing
         hist = dat.history(period="max")
         if not hist.empty:
             return hist.index[0].strftime('%Y-%m-%d')
-    except:
-        pass
+    except Exception as e:
+        print(f"Error getting listing date for {ticker}: {e}")
     return "Unknown"
 
 @app.get("/api/deep-analysis/{ticker}")
@@ -173,6 +191,8 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
             raise HTTPException(status_code=404, detail=f"Data not found for {ticker}")
             
         prices = prices.ffill().dropna()
+        # Ensure prices are positive for log calculations
+        prices = prices.clip(lower=0.0001)
         price_vals = prices.values
         
         if len(price_vals) < 30:
@@ -287,6 +307,8 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         return {
             "ticker": ticker, 
             "first_date": listing_date,
+            "current_price": float(price_vals[-1]),
+            "invested_days": len(price_vals),
             "avg_1y_return": float(mean_ret),
             "current_1y_return": float(current_ret_pct),
             "trend": {
