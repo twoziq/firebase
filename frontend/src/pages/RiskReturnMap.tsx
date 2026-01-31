@@ -65,8 +65,12 @@ export const RiskReturnMap = () => {
 
       {data.length > 0 && (
         <div className="h-[600px] bg-card border border-border rounded-xl p-4 shadow-sm cursor-pointer relative overflow-hidden" onClick={() => setIsZoomed(!isZoomed)}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 20 }}>
+          <div className="flex justify-between px-2 mb-2 text-xs text-muted-foreground font-medium">
+             <span>Y: Return (Annual %)</span>
+             <span>X: Risk (Volatility %)</span>
+          </div>
+          <ResponsiveContainer width="100%" height="95%">
+            <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: -20 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
               <XAxis 
                 type="number" 
@@ -74,8 +78,7 @@ export const RiskReturnMap = () => {
                 stroke="#9ca3af" 
                 fontSize={12} 
                 domain={domain.x} 
-                tickFormatter={(v) => v.toFixed(1)} 
-                label={{ value: 'Risk (Volatility %)', position: 'insideBottom', offset: -10, fill: '#9ca3af' }}
+                tickFormatter={(v) => v.toFixed(0)} 
               />
               <YAxis 
                 type="number" 
@@ -83,8 +86,7 @@ export const RiskReturnMap = () => {
                 stroke="#9ca3af" 
                 fontSize={12} 
                 domain={domain.y} 
-                tickFormatter={(v) => v.toFixed(1)} 
-                label={{ value: 'Return (Annual %)', angle: -90, position: 'insideLeft', offset: 10, fill: '#9ca3af' }}
+                tickFormatter={(v) => v.toFixed(0)} 
               />
               <ZAxis range={[100, 100]} />
               <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {

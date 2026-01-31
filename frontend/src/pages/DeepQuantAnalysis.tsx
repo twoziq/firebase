@@ -156,7 +156,8 @@ export const DeepQuantAnalysis = () => {
           <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-purple-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">1. Simulation Comparison (Past vs Future Model)</h2></div>
              <div className="h-[450px] bg-card border border-border rounded-2xl p-6 shadow-sm">
-                <ResponsiveContainer width="100%" height="100%">
+                <div className="text-xs text-muted-foreground mb-2 text-right">Unit: Normalized Price (Start=100)</div>
+                <ResponsiveContainer width="100%" height="95%">
                   <ComposedChart data={(() => {
                       const chartData: any[] = [];
                       const len = Math.max(data.simulation?.p50?.length || 0, data.simulation?.actual_past?.length || 0);
@@ -173,10 +174,10 @@ export const DeepQuantAnalysis = () => {
                           chartData.push(obj);
                       }
                       return chartData;
-                  })()}>
+                  })()} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.05} vertical={false} />
                     <XAxis dataKey="day" stroke="#9ca3af" fontSize={12} label={{ value: 'Days', position: 'insideBottomRight', offset: -5 }} type="number" />
-                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} label={{ value: 'Normalized (100=Start)', angle: -90, position: 'insideLeft' }} />
+                    <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={12} />
                     <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} labelFormatter={(v) => `Day ${v}`} />
                     <Legend />
                     <ReferenceLine y={100} stroke="#6b7280" strokeDasharray="3 3" />
