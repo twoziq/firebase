@@ -22,7 +22,11 @@ export const DeepQuantAnalysis = () => {
       params: { start_date: sDate, end_date: eDate, analysis_period: period, forecast_days: period }
     })
       .then(res => setData(res.data))
-      .catch(console.error)
+      .catch(err => {
+        console.error("Analysis Failed:", err);
+        const msg = err.response?.data?.detail || err.message || "Unknown Error";
+        alert(`Analysis failed: ${msg}`);
+      })
       .finally(() => setLoading(false));
   }, []);
 
