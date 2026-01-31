@@ -25,40 +25,56 @@ export const MarketValuation = () => {
     Promise.all([fetchValuation, fetchHistory]).finally(() => setLoading(false));
   }, [period]);
 
-  // Only show full page loader on initial load if no data exists yet
-  if (loading && !data && !history) return <div className="text-center p-10 text-muted-foreground animate-pulse">Loading Market Data...</div>;
-  
-  if (!data && !loading) return (
-    <div className="text-center p-10 space-y-4">
-      <div className="text-red-400 font-bold">Failed to load market valuation data.</div>
-      <button onClick={() => window.location.reload()} className="px-4 py-2 bg-muted rounded hover:bg-muted/80">Retry</button>
-    </div>
-  );
-
   const chartData = history?.dates?.map((date, i) => ({ date, value: history.values[i] })) || [];
 
-  // Custom Tick Formatter: YY.MM at 3-month intervals
+  // Custom Tick Formatter
   const formatXAxis = (tickItem: string) => {
     const d = new Date(tickItem);
     const month = d.getMonth() + 1;
     const year = String(d.getFullYear()).slice(2);
-    // Only show for 3, 6, 9, 12 months
-    if ([3, 6, 9, 12].includes(month)) {
-      return `${year}.${month < 10 ? '0' + month : month}`;
-    }
+    if ([3, 6, 9, 12].includes(month)) return `${year}.${month < 10 ? '0' + month : month}`;
     return "";
   };
 
-  // Helper for formatting large numbers
   const formatCurrency = (val: number) => {
     if (val >= 1e12) return `$${(val / 1e12).toFixed(2)}T`;
     if (val >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
     return `$${(val / 1e6).toFixed(0)}M`;
   };
 
+  // Skeleton UI components
+  const LoadingSkeleton = () => (
+    <div className="animate-pulse space-y-12 pb-20">
+      <div className="space-y-2 text-center">
+        <div className="h-8 bg-muted rounded w-64 mx-auto"></div>
+        <div className="h-4 bg-muted rounded w-48 mx-auto"></div>
+      </div>
+      <div className="flex justify-center">
+        <div className="w-64 h-64 bg-muted rounded-full"></div>
+      </div>
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="h-6 bg-muted rounded w-48"></div>
+          <div className="h-8 bg-muted rounded w-32"></div>
+        </div>
+        <div className="h-[350px] bg-muted rounded-2xl"></div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-32 bg-muted rounded-2xl"></div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Initial loading state (no data yet)
+  if (loading && !data && !history) return <LoadingSkeleton />;
+
   return (
-    <div className={`space-y-12 animate-in fade-in duration-500 pb-20 relative ${loading ? 'opacity-70 pointer-events-none' : ''}`}>
-      {loading && <div className="absolute top-0 right-0 m-4 text-xs font-bold text-primary animate-pulse">Refreshing...</div>}
+    <div className={`space-y-12 animate-in fade-in duration-500 pb-20 relative`}>
+      {/* Background refresh indicator */}
+      {loading && data && <div className="absolute top-0 right-0 m-4 text-xs font-bold text-primary animate-pulse z-10">Refreshing...</div>}
+      
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-foreground">Big Tech Valuation</h1>
         <p className="text-muted-foreground">{t('market')} - Top 8 Tech Giants</p>
@@ -67,7 +83,11 @@ export const MarketValuation = () => {
       <div className="flex justify-center">
         <div className="relative w-64 h-64 bg-card rounded-full border-4 border-primary/20 flex flex-col items-center justify-center shadow-xl">
            <span className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Market PER</span>
-           <span className="text-6xl font-black text-foreground">{data?.weighted_pe?.toFixed(1) || "0.0"}</span>
+           {data ? (
+             <span className="text-6xl font-black text-foreground">{data.weighted_pe?.toFixed(1)}</span>
+           ) : (
+             <div className="h-16 w-32 bg-muted animate-pulse rounded"></div>
+           )}
         </div>
       </div>
 
@@ -102,7 +122,7 @@ export const MarketValuation = () => {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-muted-foreground font-medium">Chart data unavailable</div>
+            loading ? <div className="text-muted-foreground animate-pulse">Loading Chart...</div> : <div className="text-muted-foreground font-medium">Chart data unavailable</div>
           )}
         </div>
       </div>
@@ -134,6 +154,10 @@ export const MarketValuation = () => {
             </div>
           );
         })}
+        {/* Skeleton items if data failed but we want to keep layout or if partial data */}
+        {!data && !loading && (
+           <div className="col-span-full text-center py-10 text-red-400">Failed to load valuation details. <button onClick={() => window.location.reload()} className="underline ml-2">Retry</button></div>
+        )}
       </div>
     </div>
   );

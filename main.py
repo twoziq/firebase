@@ -101,26 +101,36 @@ def get_market_valuation():
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
     data_dict = {}
-    mkt_caps, pes = {},
+    mkt_caps, pes = {}, {}
     
-    # Bulk download is much faster
+    # Reduce payload: Use top 3 representative tickers for history trend to ensure stability
+    # Fetching 8 tickers often causes timeout in serverless environment
+    REPRESENTATIVE_TICKERS = ['AAPL', 'MSFT', 'NVDA']
+    
     try:
-        app_logger.info(f"Bulk fetching history for {period}")
-        # Disable threading to prevent potential crashes/timeouts in serverless env
-        bulk_data = yf.download(TOP_8, period=period, progress=False, threads=False)
+        app_logger.info(f"Fetching history for {REPRESENTATIVE_TICKERS} over {period}")
+        # Disable threading for stability
+        bulk_data = yf.download(REPRESENTATIVE_TICKERS, period=period, progress=False, threads=False)
+        
+        if bulk_data.empty:
+            app_logger.warning("History download returned empty dataframe")
+            return {"dates": [], "values": []}
+            
         if isinstance(bulk_data.columns, pd.MultiIndex):
             prices_df = bulk_data['Close']
         else:
-            prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
+            # Handle single ticker case if list reduced to 1, though here we have 3
+            prices_df = pd.DataFrame({REPRESENTATIVE_TICKERS[0]: bulk_data['Close']})
+            
     except Exception as e:
         app_logger.error(f"Bulk download failed: {e}")
         return {"dates": [], "values": []}
 
-    for t in TOP_8:
+    for t in REPRESENTATIVE_TICKERS:
         try:
             info = yf.Ticker(t).info
             mkt_caps[t] = info.get('marketCap', 1)
-            pes[t] = info.get('trailingPE') or info.get('forwardPE') or 25
+            pes[t] = info.get('trailingPE') or info.get('forwardPE') or 30
             if t in prices_df.columns:
                 data_dict[t] = prices_df[t]
         except: continue
