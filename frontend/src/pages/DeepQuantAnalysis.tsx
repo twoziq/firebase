@@ -201,95 +201,159 @@ export const DeepQuantAnalysis = () => {
              </div>
           </section>
 
-                              <section className="space-y-4">
-                                 <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. {t('prob_dist')}</h2></div>
-                                 <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm relative">
-                                    <div className="absolute top-6 right-6 bg-card/80 backdrop-blur border border-border px-3 py-1 rounded-lg z-10 shadow-sm">
-                                       <span className="text-xs text-muted-foreground font-bold uppercase mr-2">Current Period Return</span>
-                                       <span className={`font-black ${data.current_1y_return > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                                         {data.current_1y_return > 0 ? '+' : ''}{data.current_1y_return?.toFixed(1)}%
-                                       </span>
-                                    </div>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                      <BarChart data={histData} barGap={0} barCategoryGap={0}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.05}/>
-                                        <XAxis dataKey="bin" stroke="#9ca3af" fontSize={10} minTickGap={30} />
-                                        <YAxis stroke="#9ca3af" fontSize={10} />
-                                        <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
-                                        <Bar dataKey="count">
-                                          {histData.map((entry, index) => {
-                                            let color = entry.val > 0 ? "#86efac" : "#93c5fd";
-                                            if (data.quant && Math.abs(entry.val - data.quant.mean) > 2 * data.quant.std) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
-                                            return <Cell key={index} fill={color} />;
-                                          })}
-                                        </Bar>
-                                                                                <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
-                                                                                
-                                                                                                                        {/* TODAY Arrow - Custom Marker pointing to the closest bin */}
-                                                                                
-                                                                                                                        {closestBinEntry && (
-                                                                                
-                                                                                                                          <ReferenceLine 
-                                                                                
-                                                                                                                            x={closestBinEntry.bin} 
-                                                                                
-                                                                                                                            stroke="#ef4444" 
-                                                                                
-                                                                                                                            strokeWidth={1}
-                                                                                
-                                                                                                                            strokeDasharray="3 3"
-                                                                                
-                                                                                                                            label={({viewBox}) => {
-                                                                                
-                                                                                                                              return (
-                                                                                
-                                                                                                                                <g>
-                                                                                
-                                                                                                                                  {/* Smaller inverted triangle, lowered height */}
-                                                                                
-                                                                                                                                  <path 
-                                                                                
-                                                                                                                                    d={`M${viewBox.x-15},${viewBox.y} L${viewBox.x+15},${viewBox.y} L${viewBox.x},${viewBox.y+15} Z`} 
-                                                                                
-                                                                                                                                    fill="#ef4444" 
-                                                                                
-                                                                                                                                  />
-                                                                                
-                                                                                                                                  <text 
-                                                                                
-                                                                                                                                    x={viewBox.x} 
-                                                                                
-                                                                                                                                    y={viewBox.y + 8} 
-                                                                                
-                                                                                                                                    fill="white" 
-                                                                                
-                                                                                                                                    fontSize={8} 
-                                                                                
-                                                                                                                                    textAnchor="middle" 
-                                                                                
-                                                                                                                                    fontWeight="bold"
-                                                                                
-                                                                                                                                  >
-                                                                                
-                                                                                                                                    today
-                                                                                
-                                                                                                                                  </text>
-                                                                                
-                                                                                                                                </g>
-                                                                                
-                                                                                                                              );
-                                                                                
-                                                                                                                            }} 
-                                                                                
-                                                                                                                          />
-                                                                                
-                                                                                                                        )}
-                                                                                
-                                                                                
-                                                                              </BarChart>
-                                                                            </ResponsiveContainer>
-                                 </div>
-                              </section>          <section className="space-y-4">
+                                                        <section className="space-y-4">
+
+                                                               <div className="flex items-center gap-2"><div className="w-1 h-8 bg-blue-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">2. {t('prob_dist')}</h2></div>
+
+                                                               <div className="h-[350px] bg-card border border-border rounded-2xl p-6 shadow-sm relative">
+
+                                                                  <ResponsiveContainer width="100%" height="100%">
+
+                                                                    <BarChart data={histData} barGap={0} barCategoryGap={0}>
+
+                                                                      <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.05}/>
+
+                                                                      <XAxis dataKey="bin" stroke="#9ca3af" fontSize={10} minTickGap={30} />
+
+                                                                      <YAxis stroke="#9ca3af" fontSize={10} />
+
+                                                                      <Tooltip contentStyle={{backgroundColor: 'hsl(var(--card))', borderRadius: '12px'}} />
+
+                                                                      <Bar dataKey="count">
+
+                                                                        {histData.map((entry, index) => {
+
+                                                                          let color = entry.val > 0 ? "#86efac" : "#93c5fd";
+
+                                                                          if (data.quant && Math.abs(entry.val - data.quant.mean) > 2 * data.quant.std) color = entry.val > 0 ? "#ef4444" : "#3b82f6";
+
+                                                                          return <Cell key={index} fill={color} />;
+
+                                                                        })}
+
+                                                                      </Bar>
+
+                                                                      
+
+                                                                      {/* Mean Line: Green Dashed */}
+
+                                                                      <ReferenceLine 
+
+                                                                        x={data.quant?.mean?.toFixed(0) + '%'} 
+
+                                                                        stroke="#22c55e" 
+
+                                                                        strokeWidth={2}
+
+                                                                        strokeDasharray="5 5" 
+
+                                                                        label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 11, fontWeight: 'bold'}} 
+
+                                                                      />
+
+                                                                      
+
+                                                                      {/* TODAY Rectangle Marker */}
+
+                                                                      {closestBinEntry && (
+
+                                                                        <ReferenceLine 
+
+                                                                          x={closestBinEntry.bin} 
+
+                                                                          stroke="#ef4444" 
+
+                                                                          strokeWidth={1}
+
+                                                                          strokeDasharray="3 3"
+
+                                                                          label={({viewBox}) => {
+
+                                                                            return (
+
+                                                                              <g>
+
+                                                                                {/* Rectangle container */}
+
+                                                                                <rect 
+
+                                                                                  x={viewBox.x - 25} 
+
+                                                                                  y={viewBox.y - 5} 
+
+                                                                                  width={50} 
+
+                                                                                  height={30} 
+
+                                                                                  rx={4}
+
+                                                                                  fill="#ef4444" 
+
+                                                                                />
+
+                                                                                <text 
+
+                                                                                  x={viewBox.x} 
+
+                                                                                  y={viewBox.y + 7} 
+
+                                                                                  fill="white" 
+
+                                                                                  fontSize={10} 
+
+                                                                                  textAnchor="middle" 
+
+                                                                                  fontWeight="bold"
+
+                                                                                >
+
+                                                                                  Today
+
+                                                                                </text>
+
+                                                                                <text 
+
+                                                                                  x={viewBox.x} 
+
+                                                                                  y={viewBox.y + 20} 
+
+                                                                                  fill="white" 
+
+                                                                                  fontSize={10} 
+
+                                                                                  textAnchor="middle" 
+
+                                                                                  fontWeight="bold"
+
+                                                                                >
+
+                                                                                  {data.current_1y_return?.toFixed(1)}%
+
+                                                                                </text>
+
+                                                                                {/* Small indicator line pointing down */}
+
+                                                                                <line x1={viewBox.x} y1={viewBox.y + 25} x2={viewBox.x} y2={viewBox.y + 35} stroke="#ef4444" strokeWidth={2} />
+
+                                                                              </g>
+
+                                                                            );
+
+                                                                          }} 
+
+                                                                        />
+
+                                                                      )}
+
+                                                                    </BarChart>
+
+                                                                  </ResponsiveContainer>
+
+                                                               </div>
+
+                                                            </section>
+
+                                        <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-yellow-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">3. {t('z_flow')}</h2></div>
              <div className="h-[300px] bg-card border border-border rounded-2xl p-6 shadow-sm">
                 <ResponsiveContainer width="100%" height="100%">
