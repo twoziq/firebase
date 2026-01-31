@@ -8,7 +8,6 @@ import pytz
 from functools import lru_cache
 import random
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Any
 
 app = FastAPI(title="Twoziq Finance API")
@@ -59,7 +58,8 @@ def get_market_valuation():
     total_mkt_cap, total_earn = 0, 0
     details = []
     
-    def fetch_ticker_info(t):
+    for t in TOP_8:
+        success = False
         for attempt in range(3): # Max 3 attempts
             try:
                 dat = yf.Ticker(t)
@@ -76,19 +76,16 @@ def get_market_valuation():
                 if m > 0 and (p is None or p == 0): p = 25 # Fallback default
                 
                 if m > 0 and p > 0:
-                    return {"ticker": t, "pe": p, "market_cap": m}
+                    details.append({"ticker": t, "pe": p, "market_cap": m})
+                    success = True
+                    break # Success, move to next ticker
             except Exception as e:
                 print(f"Error fetching {t} (attempt {attempt+1}): {e}")
                 time.sleep(0.5)
-        return None
+        
+        if not success:
+            print(f"Failed to fetch {t} after 3 attempts")
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(fetch_ticker_info, t) for t in TOP_8]
-        for future in as_completed(futures):
-            res = future.result()
-            if res:
-                details.append(res)
-    
     # Sort by market cap descending
     details.sort(key=lambda x: x['market_cap'], reverse=True)
 
