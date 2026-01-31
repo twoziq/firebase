@@ -25,7 +25,18 @@ export const MarketValuation = () => {
     Promise.all([fetchValuation, fetchHistory]).finally(() => setLoading(false));
   }, [period]);
 
-  const chartData = history?.dates?.map((date, i) => ({ date, value: history.values[i] })) || [];
+  // Scale history to match current weighted PE for consistency
+  const chartData = history?.dates?.map((date, i) => {
+    let val = history.values[i];
+    if (data?.weighted_pe && history.values.length > 0) {
+      const lastVal = history.values[history.values.length - 1];
+      if (lastVal > 0) {
+        const scale = data.weighted_pe / lastVal;
+        val *= scale;
+      }
+    }
+    return { date, value: val };
+  }) || [];
 
   // Custom Tick Formatter
   const formatXAxis = (tickItem: string) => {
