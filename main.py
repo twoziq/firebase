@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 import pytz
 from functools import lru_cache
 import random
-import time
 from typing import List, Dict, Optional, Any
 
 app = FastAPI(title="Twoziq Finance API")
@@ -57,55 +56,25 @@ def get_data(ticker: str, start: str = None, end: str = None):
 def get_market_valuation():
     total_mkt_cap, total_earn = 0, 0
     details = []
-    
     for t in TOP_8:
-        success = False
-        for attempt in range(3): # Max 3 attempts
-            try:
-                dat = yf.Ticker(t)
-                # Try fast_info first for market cap (faster/reliable)
-                try:
-                    m = dat.fast_info['market_cap']
-                except:
-                    m = dat.info.get('marketCap', 0)
-                
-                # PE requires full info or calculation. Fallback to info.
-                info = dat.info
-                p = info.get('trailingPE') or info.get('forwardPE')
-                
-                if m > 0 and (p is None or p == 0): p = 25 # Fallback default
-                
-                if m > 0 and p > 0:
-                    details.append({"ticker": t, "pe": p, "market_cap": m})
-                    success = True
-                    break # Success, move to next ticker
-            except Exception as e:
-                print(f"Error fetching {t} (attempt {attempt+1}): {e}")
-                time.sleep(0.5)
-        
-        if not success:
-            print(f"Failed to fetch {t} after 3 attempts")
-
-    # Sort by market cap descending
-    details.sort(key=lambda x: x['market_cap'], reverse=True)
-
-    for item in details:
-        total_mkt_cap += item['market_cap']
-        total_earn += item['market_cap'] / item['pe']
-            
+        try:
+            dat = yf.Ticker(t)
+            info = dat.info
+            m = info.get('marketCap', 0)
+            p = info.get('trailingPE') or info.get('forwardPE') or 25
+            if m > 0 and p > 0:
+                total_mkt_cap += m
+                total_earn += m / p
+                details.append({"ticker": t, "pe": p, "market_cap": m})
+        except Exception as e:
+            print(f"Error fetching valuation for {t}: {e}")
+            continue
     return {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
 
 @app.get("/api/market/per-history")
 def get_per_history(period: str = "2y"):
-    # Cache per period (12 Hour TTL for history)
-    cache_key = f"per_history_{period}.json"
-    cached = get_cached_data(cache_key, ttl_seconds=43200)
-    if cached:
-        print(f"Returning cached History for {period}")
-        return cached
-
     data_dict = {}
-    mkt_caps, pes = {}, {}
+    mkt_caps, pes = {},
     
     # Bulk download is much faster
     try:
@@ -144,9 +113,7 @@ def get_per_history(period: str = "2y"):
         if last_price > 0:
             weighted_idx += (df[t] / last_price) * (mkt_caps[t] / total_mkt_cap)
         
-    result = {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
-    save_cached_data(cache_key, result)
-    return result
+    return {"dates": df.index.strftime('%Y-%m-%d').tolist(), "values": (weighted_idx * avg_pe).round(1).tolist()}
 
 @app.get("/api/dca")
 def run_dca(ticker: str, start_date: str, end_date: str, amount: float, frequency: str = "monthly"):
@@ -234,7 +201,6 @@ def clean_data(data):
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252, forecast_days: int = 252):
     try:
-        # ... (Previous code remains roughly same, but wrapped in try block) ...
         print(f"Deep Analysis Request: {ticker}, {start_date} ~ {end_date}")
         if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
         
