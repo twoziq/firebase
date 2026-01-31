@@ -164,8 +164,13 @@ def get_per_history(period: str = "2y"):
                 
                 if source == 'quarterly':
                     # Calculate TTM (Sum of last 4 quarters)
-                    # Use min_periods=4 to ensure we have full year data for TTM
-                    earnings = net_income.rolling(window=4).sum().dropna()
+                    # Use min_periods=1 with annualization to prevent data drop at start
+                    # Logic: If we have 1 quarter, multiply by 4. If 2, by 2. etc.
+                    # This is an approximation but better than dropping data.
+                    def annualize(x):
+                        return x.sum() * (4 / len(x))
+                    
+                    earnings = net_income.rolling(window=4, min_periods=1).apply(annualize, raw=True).dropna()
                 else:
                     # Annual data is already 12-month sum
                     earnings = net_income
