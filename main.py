@@ -68,31 +68,43 @@ def get_market_valuation():
     def fetch_val(t):
         try:
             dat = yf.Ticker(t)
-            mc = dat.info.get('marketCap', 0)
-            if not mc: mc = dat.fast_info.get('market_cap', 0)
+            info = dat.info or {}
             
-            # Use netIncomeToCommon for precise Earnings (User verified)
-            ni = dat.info.get('netIncomeToCommon', 0)
+            # Market Cap fallback: info -> fast_info
+            mc = info.get('marketCap', 0)
+            if not mc:
+                try: mc = dat.fast_info['market_cap']
+                except: mc = 0
             
-            # Fallback to PE if NI missing
-            pe = dat.info.get('trailingPE') or 30
+            # Earnings (NI)
+            ni = info.get('netIncomeToCommon')
+            
+            # PE fallback
+            pe = info.get('trailingPE') or info.get('forwardPE') or 30
             
             return t, mc, ni, pe
-        except: return t, 0, 0, 30
+        except Exception as e:
+            app_logger.error(f"fetch_val error for {t}: {e}")
+            return t, 0, None, 30
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(fetch_val, t) for t in TOP_8]
         for future in as_completed(futures):
             t, mc, ni, pe = future.result()
-            if mc > 0:
+            if mc and mc > 0:
                 total_mkt_cap += mc
-                # Earnings: Use NI directly if avail, else derive from PE
-                earn = ni if ni > 0 else (mc / pe if pe > 0 else 0)
+                
+                # Earnings logic: Use NI if valid, else derive from PE
+                if ni is not None and ni > 0:
+                    earn = ni
+                else:
+                    earn = mc / pe if pe and pe > 0 else 0
+                
                 total_earn += earn
                 
-                # For display detail: Calc PE from MC/Earn
+                # Display PE
                 display_pe = mc / earn if earn > 0 else pe
-                details.append({"ticker": t, "pe": display_pe, "market_cap": mc})
+                details.append({"ticker": t, "pe": float(display_pe), "market_cap": float(mc)})
     
     weighted_pe = total_mkt_cap / total_earn if total_earn > 0 else 0
     return {"weighted_pe": weighted_pe, "details": details}
@@ -124,26 +136,33 @@ def get_per_history(period: str = "2y"):
     def fetch_fund(t):
         try:
             tick = yf.Ticker(t)
-            mc = tick.info.get('marketCap', 0)
-            if not mc: mc = tick.fast_info.get('market_cap', 0)
+            info = tick.info or {}
+            
+            mc = info.get('marketCap')
+            if not mc:
+                try: mc = tick.fast_info['market_cap']
+                except: mc = 0
             
             # Use netIncomeToCommon (User verified source)
-            ni = tick.info.get('netIncomeToCommon', 0)
+            ni = info.get('netIncomeToCommon')
             
             # Fallback
-            pe = tick.info.get('trailingPE') or 30
+            pe = info.get('trailingPE') or info.get('forwardPE') or 30
             
             return t, mc, ni, pe
-        except: return t, 0, 0, 30
+        except: return t, 0, None, 30
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(fetch_fund, t) for t in TOP_8]
         for future in as_completed(futures):
             t, mc, ni, pe = future.result()
-            if mc > 0:
+            if mc and mc > 0:
                 mkt_caps[t] = mc
                 # Use NI if available, else derive
-                earnings_dict[t] = ni if ni > 0 else (mc / pe if pe > 0 else 0)
+                if ni is not None and ni > 0:
+                    earnings_dict[t] = ni
+                else:
+                    earnings_dict[t] = mc / pe if pe and pe > 0 else (mc / 30)
 
     # 3. Calculate Current Weighted PER
     total_mc = sum(mkt_caps.values())
@@ -157,7 +176,7 @@ def get_per_history(period: str = "2y"):
     # Then multiply by current_weighted_pe.
     
     # Fill missing prices
-    df = prices_df.ffill().bfill()
+    df = prices_df.ffill().bfill().fillna(0)
     
     # Identify valid tickers (intersection of prices and fetched info)
     valid_tickers = [t for t in TOP_8 if t in df.columns and t in mkt_caps]
@@ -167,23 +186,24 @@ def get_per_history(period: str = "2y"):
     weighted_idx = pd.Series(0.0, index=df.index)
     
     for t in valid_tickers:
-        current_price = df[t].iloc[-1]
+        last_valid_price = df[t].replace(0, np.nan).ffill().iloc[-1]
+        current_price = last_valid_price if not np.isnan(last_valid_price) else 0
+        
         if current_price > 0:
             # Weight based on Current Market Cap
             weight = mkt_caps[t] / total_mc
             # Price Trend (Normalized to 1.0 at end)
             price_trend = df[t] / current_price
             
-            weighted_idx += price_trend * weight
+            weighted_idx += price_trend.fillna(0) * weight
             
     # Final PER History = Index * Current PER
     # This ensures the last value matches 'current_weighted_pe' exactly.
-    # And historical values represent "Valuation relative to today based on price".
     per_history = weighted_idx * current_weighted_pe
     
     return {
         "dates": per_history.index.strftime('%Y-%m-%d').tolist(), 
-        "values": per_history.round(1).tolist()
+        "values": per_history.replace([np.inf, -np.inf], 0).fillna(0).round(1).tolist()
     }
 
 # ... rest of API endpoints (dca, risk, deep, listing_date, safe_float, clean_data, main) ...

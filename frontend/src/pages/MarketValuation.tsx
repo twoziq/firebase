@@ -37,12 +37,13 @@ export const MarketValuation = () => {
   };
 
   const formatCurrency = (val: number) => {
+    if (!val || !isFinite(val)) return "N/A";
     if (val >= 1e12) return `$${(val / 1e12).toFixed(2)}T`;
     if (val >= 1e9) return `$${(val / 1e9).toFixed(1)}B`;
     return `$${(val / 1e6).toFixed(0)}M`;
   };
 
-  // Skeleton UI components
+  // ... (Skeleton UI components remains same)
   const LoadingSkeleton = () => (
     <div className="animate-pulse space-y-12 pb-20">
       <div className="space-y-2 text-center">
@@ -112,11 +113,11 @@ export const MarketValuation = () => {
                   tickFormatter={formatXAxis}
                   minTickGap={30}
                 />
-                <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={10} tickFormatter={(v) => v.toFixed(1)} />
+                <YAxis domain={['auto', 'auto']} stroke="#9ca3af" fontSize={10} tickFormatter={(v) => (v && isFinite(v)) ? v.toFixed(1) : ""} />
                 <Tooltip 
                   contentStyle={{backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '12px'}} 
                   labelFormatter={(v) => `Date: ${v}`}
-                  formatter={(v: any) => [Number(v || 0).toFixed(1), 'Weighted PER']}
+                  formatter={(v: any) => [v && isFinite(v) ? Number(v).toFixed(1) : "N/A", 'Weighted PER']}
                 />
                 <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={3} dot={false} animationDuration={1000} />
               </LineChart>
@@ -137,7 +138,7 @@ export const MarketValuation = () => {
                   <p className="font-black text-xl">{item.ticker}</p>
                   <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">PER</span>
                 </div>
-                <p className="text-2xl text-foreground font-bold">{item.pe.toFixed(1)}</p>
+                <p className="text-2xl text-foreground font-bold">{item.pe && isFinite(item.pe) ? item.pe.toFixed(1) : "N/A"}</p>
               </div>
               
               {/* Hover Details */}
