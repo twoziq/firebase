@@ -62,6 +62,13 @@ export const DeepQuantAnalysis = () => {
     count: data.quant.counts[i]
   })) || [];
 
+  // Find the bin entry closest to the current return for accurate positioning of the marker
+  const closestBinEntry = (histData.length > 0 && data?.current_1y_return !== undefined)
+    ? histData.reduce((prev, curr) => 
+        Math.abs(curr.val - data.current_1y_return) < Math.abs(prev.val - data.current_1y_return) ? curr : prev
+      )
+    : null;
+
   const zHistoryData = data?.quant?.z_history?.map((z, i) => ({
     date: data.quant.z_dates[i], 
     z: z
@@ -216,20 +223,31 @@ export const DeepQuantAnalysis = () => {
                                             return <Cell key={index} fill={color} />;
                                           })}
                                         </Bar>
-                                        <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
-                                        
-                                                            {/* TODAY Arrow - Custom Marker */}
-                                                            <ReferenceLine 
-                                                              x={data.current_1y_return?.toFixed(0) + '%'} 
-                                                              stroke="#ef4444" 
-                                                              strokeWidth={0}
-                                                              label={({viewBox}) => {
-                                                                return (
-                                                                  <text x={viewBox.x} y={viewBox.y} dy={-5} fill="#ef4444" fontSize={18} textAnchor="middle" fontWeight="bold">▼</text>
-                                                                );
-                                                              }} 
-                                                            />
-                                                          </BarChart>                                    </ResponsiveContainer>
+                                                                                <ReferenceLine x={data.quant?.mean?.toFixed(0) + '%'} stroke="#22c55e" strokeDasharray="3 3" label={{position: 'top', value: 'Mean', fill: '#22c55e', fontSize: 10}} />
+                                                                                
+                                                                                {/* TODAY Arrow - Custom Marker pointing to the closest bin */}
+                                                                                {closestBinEntry && (
+                                                                                  <ReferenceLine 
+                                                                                    x={closestBinEntry.bin} 
+                                                                                    stroke="#ef4444" 
+                                                                                    strokeWidth={1}
+                                                                                    strokeDasharray="3 3"
+                                                                                    label={({viewBox}) => {
+                                                                                      return (
+                                                                                        <g>
+                                                                                          <text x={viewBox.x} y={viewBox.y} dy={-10} fill="#ef4444" fontSize={14} textAnchor="middle" fontWeight="bold">
+                                                                                            TODAY ({data.current_1y_return?.toFixed(1)}%)
+                                                                                          </text>
+                                                                                          <text x={viewBox.x} y={viewBox.y} dy={5} fill="#ef4444" fontSize={20} textAnchor="middle" fontWeight="bold">
+                                                                                            ▼
+                                                                                          </text>
+                                                                                        </g>
+                                                                                      );
+                                                                                    }} 
+                                                                                  />
+                                                                                )}
+                                                                              </BarChart>
+                                                                            </ResponsiveContainer>
                                  </div>
                               </section>          <section className="space-y-4">
              <div className="flex items-center gap-2"><div className="w-1 h-8 bg-yellow-500 rounded-full"/><h2 className="text-xl font-bold text-foreground">3. {t('z_flow')}</h2></div>

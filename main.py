@@ -324,10 +324,13 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
             app_logger.error(f"Simulation Error: {e}")
             p50_path, p95_path, p05_path, samples = [], [], [], []
         try:
-            if len(price_vals) > forecast_days:
-                recent_prices = price_vals[-int(forecast_days):]
+            # Align recent_prices with lookback period (252 days gap requires 253 prices)
+            lookback = int(forecast_days)
+            if len(price_vals) > lookback:
+                recent_prices = price_vals[-(lookback + 1):]
             else:
                 recent_prices = price_vals
+            
             lump_perf = (recent_prices / recent_prices[0] * 100).tolist()
             dca_shares = 0.0
             dca_cost = 0.0
