@@ -8,7 +8,6 @@ import pytz
 from functools import lru_cache
 import random
 from typing import List, Dict, Optional, Any
-
 import logging
 from collections import deque
 
@@ -33,11 +32,11 @@ app_logger = logging.getLogger("twoziq")
 app_logger.setLevel(logging.INFO)
 app_logger.addHandler(list_handler)
 
+app = FastAPI(title="Twoziq Finance API")
+
 @app.get("/api/logs")
 def get_server_logs():
     return {"logs": list(SERVER_LOGS)}
-
-# ... (rest of the file)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,17 +53,17 @@ TOP_8 = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO']
 def get_data(ticker: str, start: str = None, end: str = None):
     # 1차 시도: yf.download
     try:
-        print(f"Attempt 1 (download): Fetching {ticker} from {start} to {end}")
+        app_logger.info(f"Attempt 1 (download): Fetching {ticker} from {start} to {end}")
         df = yf.download(ticker, start=start, end=end, progress=False)
         
         if not df.empty:
             return df['Close'].iloc[:, 0] if isinstance(df.columns, pd.MultiIndex) else df['Close']
     except Exception as e:
-        print(f"Attempt 1 failed for {ticker}: {e}")
+        app_logger.error(f"Attempt 1 failed for {ticker}: {e}")
 
     # 2차 시도: yf.Ticker().history (Fallback)
     try:
-        print(f"Attempt 2 (history): Fetching {ticker} via Ticker.history")
+        app_logger.info(f"Attempt 2 (history): Fetching {ticker} via Ticker.history")
         dat = yf.Ticker(ticker)
         # start/end가 있으면 사용, 없으면 period="max"
         if start and end:
@@ -75,9 +74,9 @@ def get_data(ticker: str, start: str = None, end: str = None):
         if not df.empty:
             return df['Close']
     except Exception as e:
-        print(f"Attempt 2 failed for {ticker}: {e}")
+        app_logger.error(f"Attempt 2 failed for {ticker}: {e}")
 
-    print(f"All attempts failed for {ticker}")
+    app_logger.error(f"All attempts failed for {ticker}")
     return None
 
 @app.get("/api/market/valuation")
@@ -95,7 +94,7 @@ def get_market_valuation():
                 total_earn += m / p
                 details.append({"ticker": t, "pe": p, "market_cap": m})
         except Exception as e:
-            print(f"Error fetching valuation for {t}: {e}")
+            app_logger.error(f"Error fetching valuation for {t}: {e}")
             continue
     return {"weighted_pe": total_mkt_cap / total_earn if total_earn > 0 else 0, "details": details}
 
@@ -106,13 +105,14 @@ def get_per_history(period: str = "2y"):
     
     # Bulk download is much faster
     try:
+        app_logger.info(f"Bulk fetching history for {period}")
         bulk_data = yf.download(TOP_8, period=period, progress=False)
         if isinstance(bulk_data.columns, pd.MultiIndex):
             prices_df = bulk_data['Close']
         else:
             prices_df = pd.DataFrame({TOP_8[0]: bulk_data['Close']})
     except Exception as e:
-        print(f"Bulk download failed: {e}")
+        app_logger.error(f"Bulk download failed: {e}")
         return {"dates": [], "values": []}
 
     for t in TOP_8:
@@ -202,7 +202,7 @@ def get_listing_date(ticker: str):
         if not hist.empty:
             return hist.index[0].strftime('%Y-%m-%d')
     except Exception as e:
-        print(f"Error getting listing date for {ticker}: {e}")
+        app_logger.error(f"Error getting listing date for {ticker}: {e}")
     return "Unknown"
 
 def safe_float(val):
@@ -229,14 +229,14 @@ def clean_data(data):
 @app.get("/api/deep-analysis/{ticker}")
 def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str = None, analysis_period: int = 252, forecast_days: int = 252):
     try:
-        print(f"Deep Analysis Request: {ticker}, {start_date} ~ {end_date}")
+        app_logger.info(f"Deep Analysis Request: {ticker}, {start_date} ~ {end_date}")
         if not end_date: end_date = datetime.now().strftime('%Y-%m-%d')
         
         # 1. Fetch Data
         prices = get_data(ticker, start=start_date, end=end_date)
         
         if prices is None or prices.empty: 
-            print("Data not found")
+            app_logger.warning("Data not found")
             raise HTTPException(status_code=404, detail=f"Data not found for {ticker}")
             
         prices = prices.ffill().dropna()
@@ -245,7 +245,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         price_vals = prices.values
         
         if len(price_vals) < 30:
-             print("Data too short")
+             app_logger.warning("Data too short")
              raise HTTPException(status_code=400, detail="Not enough data history")
 
         # --- 2. Simulation (Monte Carlo) ---
@@ -271,7 +271,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
             p05_path = np.percentile(sim_paths, 5, axis=0).tolist()
             samples = sim_paths[:30].tolist()
         except Exception as e:
-            print(f"Simulation Error: {e}")
+            app_logger.error(f"Simulation Error: {e}")
             p50_path, p95_path, p05_path, samples = [], [], [], []
 
         # --- DCA vs Lump Sum Simulation (Past/Recent) ---
@@ -295,7 +295,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
                 
             savings_perf = [100.0] * len(recent_prices)
         except Exception as e:
-            print(f"DCA Calc Error: {e}")
+            app_logger.error(f"DCA Calc Error: {e}")
             lump_perf, dca_perf, savings_perf = [], [], []
         
         simulation_data = { 
@@ -331,7 +331,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
                 mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
                 z_history, z_dates, hist_bins, hist_counts = [], [], [], []
         except Exception as e:
-            print(f"Quant Error: {e}")
+            app_logger.error(f"Quant Error: {e}")
             mean_ret, std_ret, current_z, current_ret_pct = 0, 0, 0, 0
             z_history, z_dates, hist_bins, hist_counts = [], [], [], []
 
@@ -350,7 +350,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
             trend_upper = (trend_line * np.exp(2*std_resid)).tolist()
             trend_lower = (trend_line * np.exp(-2*std_resid)).tolist()
         except Exception as e:
-            print(f"Trend Error: {e}")
+            app_logger.error(f"Trend Error: {e}")
             trend_dates, trend_prices, trend_middle, trend_upper, trend_lower = [], [], [], [], []
         
         # Safe Listing Date Fetch
@@ -358,7 +358,7 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         try:
             listing_date = get_listing_date(ticker)
         except Exception as e:
-            print(f"Listing Date Error: {e}")
+            app_logger.error(f"Listing Date Error: {e}")
             listing_date = prices.index[0].strftime('%Y-%m-%d') # Fallback
         
         response_payload = {
@@ -390,10 +390,10 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
         return clean_data(response_payload)
         
     except Exception as e:
-        print(f"CRITICAL Error in get_deep_analysis: {e}")
+        app_logger.error(f"CRITICAL Error in get_deep_analysis: {e}")
         import traceback
         err_msg = traceback.format_exc()
-        print(err_msg)
+        app_logger.error(err_msg)
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}\n\nTraceback:\n{err_msg}")
 
 if __name__ == "__main__":
