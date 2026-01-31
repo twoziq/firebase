@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TickerCombobox } from '../components/TickerCombobox';
 import { api } from '../lib/api';
 import type { DcaData } from '../lib/types';
@@ -21,7 +21,7 @@ export const DcaSimulator = () => {
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const priceColor = isDark ? "#e5e5e5" : "#4b5563";
 
-  const handleSearch = (selectedTicker: string = ticker) => {
+  const handleSearch = useCallback((selectedTicker: string = ticker) => {
     setLoading(true);
     if (selectedTicker !== ticker) setTicker(selectedTicker);
     
@@ -45,7 +45,7 @@ export const DcaSimulator = () => {
         alert(`DCA Analysis failed: ${JSON.stringify(errorDetail)}`);
       })
       .finally(() => setLoading(false));
-  };
+  }, [ticker, startDate, endDate, amount, frequency]);
 
   useEffect(() => { handleSearch('^IXIC'); }, []);
 
