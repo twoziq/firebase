@@ -429,8 +429,8 @@ def get_deep_analysis(ticker: str, start_date: str = "2010-01-01", end_date: str
                 "current_z": float(current_z),
                 "z_history": z_history,
                 "z_dates": z_dates,
-                "bins": hist_bins[:-1].tolist() if len(hist_bins) > 0 else [], 
-                "counts": hist_counts.tolist()
+                "bins": hist_bins, 
+                "counts": hist_counts
             },
             "simulation": simulation_data
         }
